@@ -1,0 +1,88 @@
+---
+title: 第一个api文档
+discription: 第一个api文档描述
+scheme: https
+host: test.abc.com
+uri: /hello-world
+method: POST
+request:
+  - contentType: application/json
+    referParameter: second_layer_scheme
+    parameters:
+      - fullname: _invokeId
+        title: 请求ID
+        type: string
+        required: 'yes'
+        position: body
+        descripton: ''
+        example: SALE6112551040773
+      - fullname: _interface
+        title: 接口
+        type: string
+        required: 'yes'
+        position: body
+        enum:
+          - value: XianYuYiYanHuo.User.AuthBind
+            title: 绑定鉴权接口
+        descripton: 接口名称
+        example: XianYuYiYanHuo.User.AuthBind
+      - fullname: _callerServiceId
+        title: 调用方服务ID
+        type: string
+        required: 'yes'
+        position: body
+        descripton: 调用方服务ID
+        example: '1245'
+      - fullname: _param.merchantId
+        title: 商户ID
+        type: string
+        required: 'yes'
+        position: body
+        example: '141210'
+      - fullname: _param.authCode
+        title: 鉴权码
+        type: string
+        required: 'yes'
+        position: body
+        example: dfsdfs
+responseOk:
+  - contentType: application/json
+    parameters:
+      - fullname: _head._interface
+        title: 接口
+        type: string
+        required: 'yes'
+        position: body
+        example: XianYuYiYanHuo.User.AuthBind
+      - fullname: _data.data.success
+        title: 状态码
+        type: string
+        required: 'yes'
+        position: body
+        example: '1'
+      - fullname: _data.data.message
+        title: 提示
+        type: string
+        required: 'yes'
+        position: body
+        example: ok
+responseError:
+  - contentType: application/json
+    parameters:
+      - fullname: _data._ret
+        title: 结果
+        type: string
+        required: 'yes'
+        position: body
+        enum:
+          - value: '1'
+            title: 异常
+          - value: '0'
+            title: 正常
+        example: '0'
+---
+
+
+<JsonLine type="parameter">
+name=_data._ret,title=结果,enum=[1-异常,0-正常]
+</JsonLine>
