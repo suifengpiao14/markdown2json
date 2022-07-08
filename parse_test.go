@@ -8,7 +8,8 @@ import (
 )
 
 func TestParse(t *testing.T) {
-	file := "./example/first-doc.mdx"
+	//file := "./example/first-doc.mdx"
+	file := "./example/spuUpdateQuestion.md"
 	str, err := parsemarkdown.Parse(file)
 	if err != nil {
 		panic(err)
