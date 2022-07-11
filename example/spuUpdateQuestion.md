@@ -23,9 +23,18 @@
 
 <!--api.variable=signature:joenebfhefeh -->
 
-<!--api.preRequest
+<!--api.preRequest args=options
+   var serviceId=options.variables.filter(function(row){return row.name=="serviceId"})[0]?.value;
+options.headers['HSB-OPENAPI-CALLERSERVICEID']=String(serviceId);
 
-   console.log("hello world")
+
+var callersStr=options.variables.filter(function(row){return row.name=="signature"})[0]?.value;
+var callers=JSON.parse(callersStr);
+var caller = options.headers['HSB-OPENAPI-CALLERSERVICEID'];
+var secret = callers[caller];
+var paramStr  = JSON.stringify(options.requestBody);
+var singnature = MD5(paramStr.concat("_",secret));
+options.headers['HSB-OPENAPI-SIGNATURE']= String(singnature);
 
 -->
 
