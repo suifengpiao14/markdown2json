@@ -1,4 +1,4 @@
-## heading {#id .className attrName=attrValue class="class1 class2"}
+# 手动获取spu问卷
 **简要描述：**
 > 手动获取spu问卷
 
