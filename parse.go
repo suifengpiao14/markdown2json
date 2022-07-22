@@ -63,14 +63,28 @@ type Attr struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
-type ApiAttribute struct {
-	Name  string  `json:"name"`
-	Value string  `json:"value"`
-	Attrs []*Attr `json:"attrs"`
+
+type Attrs []*Attr
+
+func (attrs Attrs) GetByName(name string) (attr *Attr, ok bool) {
+	for _, at := range attrs {
+		if at.Name == name {
+			return at, true
+		}
+	}
+	return nil, false
 }
 
-func parseApi(node ast.Node, source []byte) (apiAttributes []*ApiAttribute) {
-	apiAttributes = make([]*ApiAttribute, 0)
+type ApiElement struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+	Attrs Attrs  `json:"attrs"`
+}
+
+type ApiElements []ApiElement
+
+func parseApi(node ast.Node, source []byte) (apiElements []*ApiElement) {
+	apiElements = make([]*ApiElement, 0)
 	if htmlBlock, ok := node.(*ast.HTMLBlock); ok && htmlBlock.HTMLBlockType == ast.HTMLBlockType2 {
 		htmlRaw := Node2RawText(htmlBlock, source)
 		attribute := parseRawHtml(htmlRaw)
@@ -82,7 +96,7 @@ func parseApi(node ast.Node, source []byte) (apiAttributes []*ApiAttribute) {
 			}
 			attribute.Value = Node2RawText(nextNode, source)
 		}
-		apiAttributes = append(apiAttributes, attribute)
+		apiElements = append(apiElements, attribute)
 	}
 	if rawHTML, ok := node.(*ast.RawHTML); ok {
 		txt := Node2RawText(rawHTML, source)
@@ -91,19 +105,19 @@ func parseApi(node ast.Node, source []byte) (apiAttributes []*ApiAttribute) {
 			nextNode := node.NextSibling()
 			attribute.Value = Node2RawText(nextNode, source)
 		}
-		apiAttributes = append(apiAttributes, attribute)
+		apiElements = append(apiElements, attribute)
 	}
 	if node.HasChildren() {
 		firstChild := node.FirstChild()
 		subAttr := parseApi(firstChild, source)
-		apiAttributes = append(apiAttributes, subAttr...)
+		apiElements = append(apiElements, subAttr...)
 	}
 	nextNode := node.NextSibling()
 	if nextNode != nil {
 		subAttr := parseApi(nextNode, source)
-		apiAttributes = append(apiAttributes, subAttr...)
+		apiElements = append(apiElements, subAttr...)
 	}
-	return apiAttributes
+	return apiElements
 }
 
 func fencedCodeContentType(fencedCodeNode ast.FencedCodeBlock, source []byte) (attr *Attr) {
@@ -127,9 +141,9 @@ func fencedCodeContentType(fencedCodeNode ast.FencedCodeBlock, source []byte) (a
 	return attr
 }
 
-func parseRawHtml(rawText string) (attribute *ApiAttribute) {
+func parseRawHtml(rawText string) (attribute *ApiElement) {
 
-	attribute = &ApiAttribute{
+	attribute = &ApiElement{
 		Attrs: make([]*Attr, 0),
 	}
 	rawText = strings.TrimSpace(rawText)
@@ -203,13 +217,53 @@ type KV struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
+
+type Example struct {
+	Name     string `json:"name"`
+	Request  string `json:"request"`
+	Response string `json:"response"`
+}
+
+func (example Example) FillAttr(attr Attr) {
+	switch attr.Name {
+	case "name":
+		example.Name = attr.Value
+	case "direction":
+
+	}
+}
+
+type Examples []*Example
+
+func (examples Examples) GetByName(name string) (example *Example, ok bool) {
+	for _, ex := range examples {
+		if ex.Name == name {
+			return ex, true
+		}
+	}
+	return nil, false
+}
+
+//Add 增加案例，存在替换，不存在新增
+func (examples Examples) Add(example *Example) {
+	for i, ex := range examples {
+		if ex.Name == example.Name {
+			examples[i] = example
+			return
+		}
+	}
+	examples = append(examples, example)
+	return
+}
+
 type Api struct {
-	URL        string `json:"url"`
-	Method     string `json:"metod"`
-	Header     []*KV  `json:"header"`
-	Query      string `json:"query"`
-	Body       string `json:"body"`
-	PreRequest string `json:"preRequest"`
+	URL        string   `json:"url"`
+	Method     string   `json:"metod"`
+	Header     []*KV    `json:"header"`
+	Query      string   `json:"query"`
+	Body       string   `json:"body"`
+	PreRequest string   `json:"preRequest"`
+	Examples   Examples `json:"examples"`
 }
 
 const (
@@ -220,9 +274,10 @@ const (
 	API_QUERY       = "api.query"
 	API_BODY        = "api.body"
 	API_PRE_REQUEST = "api.preRequest"
+	API_EXAMPLE     = "api.example"
 )
 
-func FormatApi(apiAttributes []*ApiAttribute) (api *Api, err error) {
+func FormatApi(apiAttributes []*ApiElement) (api *Api, err error) {
 	api = &Api{
 		Header: make([]*KV, 0),
 	}
@@ -258,7 +313,21 @@ func FormatApi(apiAttributes []*ApiAttribute) (api *Api, err error) {
 			}
 			api.Header = append(api.Header, kv)
 		case API_PRE_REQUEST:
-			fmt.Println(apiAttr.Value)
+			api.PreRequest = apiAttr.Value
+		case API_EXAMPLE:
+			nameAttr, ok := apiAttr.Attrs.GetByName("name")
+			if !ok {
+				nameAttr = &Attr{}
+			}
+			name := nameAttr.Value
+			example, ok := api.Examples.GetByName(name)
+			if !ok {
+				example = &Example{
+					Name: name,
+				}
+			}
+
+			api.Examples.Add(example)
 
 		}
 	}
