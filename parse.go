@@ -57,17 +57,6 @@ func Parse(mdxFile string) (out string, err error) {
 	}
 	out = string(b)
 	return out, nil
-
-	// newMetaData, err := convmap.Convert(metaData, convmap.ConvertMapKeyStrict)
-	// if err != nil {
-	// 	return "", err
-	// }
-	// byt, err := json.Marshal(newMetaData)
-	// if err != nil {
-	// 	return "", err
-	// }
-	// out = string(byt)
-	// return out, nil
 }
 
 type Attr struct {

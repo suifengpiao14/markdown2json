@@ -23,7 +23,8 @@
 
 <!--api.variable=signature:joenebfhefeh -->
 
-<!--api.preRequest args=options
+<!--api.preRequest args=options -->
+```javascript
    var serviceId=options.variables.filter(function(row){return row.name=="serviceId"})[0]?.value;
 options.headers['HSB-OPENAPI-CALLERSERVICEID']=String(serviceId);
 
@@ -35,8 +36,8 @@ var secret = callers[caller];
 var paramStr  = JSON.stringify(options.requestBody);
 var singnature = MD5(paramStr.concat("_",secret));
 options.headers['HSB-OPENAPI-SIGNATURE']= String(singnature);
+```
 
--->
 
 
 **请求示例：**
