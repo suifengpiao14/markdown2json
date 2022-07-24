@@ -2,7 +2,7 @@
 
 ### 公共HTTP请求头
 > 注意: 列举的名称为_head 属性名称，具体请求格式参考案例
-<!--api.header column=name,type,required,description-->
+<!--doc.parameter column=name,type,required,description position=head-->
 | 名称|类型|必选|案例|说明|
 |:--|:--|:--|:--|:--|
 |Content-Type|string|是|application/json|请求格式,当前只支持<!--enum-->application/json<!--/enum-->|
@@ -11,7 +11,7 @@
 
 ### 公共参数
 > 注意: 列举的名称为_head 属性名称，具体请求格式参考案例
-<!--api.body column=name,type,required,description prefix=_head-->
+<!--doc.parameter column=name,type,required,description prefix=_head position=body-->
 | 名称|类型|必选|案例|说明|
 |:--|:--|:--|:--|:--|
 |_version|string|是|0.01|协议版本号<br/>可选值:0.01|
@@ -26,7 +26,7 @@
 
 
 ### 公共参数案例
-<!--api.example-->
+<!--doc.example.body -->
 ```json
 {
     "_head":{

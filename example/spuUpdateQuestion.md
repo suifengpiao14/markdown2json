@@ -4,17 +4,17 @@
 
 **协议：**
 - 级别：二层
-- 路径：<!--api.uri--> /spu/ajaxSpuUpdateQuestion
-- 请求方法 :<!--api.method--> POST
+- 路径：<!--doc.api.uri--> /spu/ajaxSpuUpdateQuestion
+- 请求方法 :<!--doc.api.method--> POST
 
 **环境：**
-- 开发：<!--api.server name=dev(开发环境)-->193.112.197.63 http://opms.huishoubao.com.cn
-- 测试：<!--api.server name=test(测试环境)-->xx.xx.xx.xx  http://opms.huishoubao.com.cn
-- 线上：<!--api.host-->http://opms.huishoubao.com.cn
+- 开发： <!--doc.server.proxy description=开发环境-->193.112.197.63 http://opms.huishoubao.com.cn
+- 测试：<!--doc.server.proxy description=测试环境-->xx.xx.xx.xx  http://opms.huishoubao.com.cn
+- 线上：<!--doc.server.url-->http://opms.huishoubao.com.cn
 
-<!--api.body $ref=http://api.doc/common/parameters-->
-<!--api.body column=name,type,required,default,description keymap=格式(format),枚举值(format)-->
+<!--doc.parameter.ref=http://doc.doc/common/parameters position=body-->
 **请求参数：**
+<!--doc.parameter position=body column="name,type,required,default,description" keymap="格式:format,枚举值:enum"-->
 |参数名|类型|必选|默认值|说明|
 |:----    |:---|:----- |-----   |-----   |
 |scene| string|是|-|场景<br/>枚举值:3C(3C),3C_NEW(3C_NEW)|
@@ -22,12 +22,10 @@
 |Fxy_product_name| string|是|-|闲鱼SPU 名称|
 |Fhsb_product_id| string|是|-|回收宝产品ID<br/>格式: number(数字类型) |
 
-<!--api.header=Hsb_service_id:1001 -->
-<!--api.header=Hsb-signature:123 -->
 
-<!--api.variable=signature:joenebfhefeh -->
+<!--doc.server.variables=signature:joenebfhefeh -->
 
-<!--api.preRequest args=options -->
+<!--doc.server.preRequest-->
 ```javascript
 var serviceId=options.variables.filter(function(row){return row.name=="serviceId"})[0]?.value;
 options.headers['HSB-OPENAPI-CALLERSERVICEID']=String(serviceId);
@@ -43,7 +41,7 @@ options.headers['HSB-OPENAPI-SIGNATURE']= String(singnature);
 
 
 **请求示例：**
-<!--api.example name=simple key=request -->
+<!--doc.example.body-->
 ```json
 {
    "scene":"3c",
@@ -54,6 +52,7 @@ options.headers['HSB-OPENAPI-SIGNATURE']= String(singnature);
 ```
 
 **返回结果：**
+<!--doc.parameter position=body httpStatus="200" column="name,type,description"-->
 |参数名|类型|说明|
 |:-----  |:-----|----- |
 |_ret |string   |0成功 1失败  |
@@ -63,7 +62,7 @@ options.headers['HSB-OPENAPI-SIGNATURE']= String(singnature);
 **返回示例：**
 
 成功示例
-<!--api.example name=simple key=response type=success -->
+<!--doc.example.response id=ok -->
 ```json
 {
    "errcode":"0",
@@ -74,7 +73,7 @@ options.headers['HSB-OPENAPI-SIGNATURE']= String(singnature);
 **返回示例：**
 
 失败示例
-<!--api.response.examle name=simple type=error -->
+<!--doc.example.response id=err -->
 ```json
 {
    "errcode":"15785",

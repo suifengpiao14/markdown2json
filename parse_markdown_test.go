@@ -1,6 +1,7 @@
 package markdown2json_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -10,9 +11,14 @@ import (
 func TestParse(t *testing.T) {
 	//file := "./example/first-doc.mdx"
 	file := "./example/spuUpdateQuestion.md"
-	str, err := parsemarkdown.Parse(file)
+	apiElements, err := parsemarkdown.Parse(file)
 	if err != nil {
 		panic(err)
 	}
+	b, err := json.Marshal(apiElements)
+	if err != nil {
+		panic(err)
+	}
+	str := string(b)
 	fmt.Println(str)
 }
