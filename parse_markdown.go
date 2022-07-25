@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/antchfx/xmlquery"
 	"github.com/pkg/errors"
 	"github.com/yuin/goldmark"
 	meta "github.com/yuin/goldmark-meta"
@@ -18,6 +19,39 @@ import (
 	"github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
 )
+
+func ParseMarkdown(source []byte) (out string) {
+	md := goldmark.New(
+		goldmark.WithExtensions(extension.GFM),
+		goldmark.WithParserOptions(
+			parser.WithAutoHeadingID(),
+		),
+		goldmark.WithRendererOptions(
+			html.WithHardWraps(),
+			html.WithXHTML(),
+			html.WithUnsafe(),
+		),
+	)
+	var buf bytes.Buffer
+	if err := md.Convert(source, &buf); err != nil {
+		panic(err)
+	}
+	return buf.String()
+}
+
+func QueryXML(xhtml string) (err error) {
+	doc, err := xmlquery.Parse(strings.NewReader(xhtml))
+	if err != nil {
+		return err
+	}
+	list := xmlquery.Find(doc, ".//comment()")
+	for _, comment := range list {
+
+		fmt.Println(comment.Data)
+	}
+
+	return nil
+}
 
 func Parse(mdxFile string) (apiElements ApiElements, err error) {
 	fd, err := os.OpenFile(mdxFile, os.O_RDONLY, os.ModePerm)
@@ -45,10 +79,14 @@ func Parse(mdxFile string) (apiElements ApiElements, err error) {
 	)
 	reader := text.NewReader(source)
 	document := md.Parser().Parse(reader)
-	//metaData := document.OwnerDocument().Meta()
-	//document.Dump(source, 10)
 	apiElements = parseApi(document, source, nil)
-	return apiElements, nil
+	for {
+		refApiElement, ok := apiElements.PopByName("ref")
+		if !ok {
+			return apiElements, nil
+		}
+		fmt.Printf("todo ,get content from %s", refApiElement.Value)
+	}
 }
 
 type Attr struct {
@@ -77,10 +115,11 @@ func (attrs *Attrs) PopByName(name string) (attr *Attr, ok bool) {
 }
 
 type ApiElement struct {
-	Tag   string `json:"tag"`
-	Name  string `json:"name"`
-	Value string `json:"value"`
-	Attrs Attrs  `json:"attrs"`
+	Tag      string `json:"tag"`
+	Name     string `json:"name"`
+	RefLevel string `json:"refLevel"`
+	Value    string `json:"value"`
+	Attrs    Attrs  `json:"attrs"`
 }
 
 func (apiElement *ApiElement) Clone() (clone ApiElement) {
@@ -106,6 +145,27 @@ func (apiElement *ApiElement) AddAttr(attr *Attr) {
 }
 
 type ApiElements []ApiElement
+
+func (apiElements *ApiElements) GetByName(name string) (subApiElements []ApiElement, ok bool) {
+	subApiElements = ApiElements{}
+	for _, elem := range *apiElements {
+		if elem.Name == name {
+			subApiElements = append(subApiElements, elem)
+		}
+	}
+	return subApiElements, len(subApiElements) > 0
+}
+
+//弹出找到的第一个
+func (apiElements *ApiElements) PopByName(name string) (apiElement *ApiElement, ok bool) {
+	for i, elem := range *apiElements {
+		if elem.Name == name {
+			*apiElements = append((*apiElements)[:i], (*apiElements)[i+1:]...)
+			return &elem, true
+		}
+	}
+	return nil, false
+}
 
 func parseApi(node ast.Node, source []byte, parent *ApiElement) (apiElements []ApiElement) {
 	apiElements = make([]ApiElement, 0)
@@ -201,6 +261,7 @@ func parseApi(node ast.Node, source []byte, parent *ApiElement) (apiElements []A
 							for {
 								if lineNode == nil {
 									if txt != "" {
+										txt = strings.TrimSpace(txt)
 										txtArr = append(txtArr, txt)
 									}
 									break
@@ -212,6 +273,7 @@ func parseApi(node ast.Node, source []byte, parent *ApiElement) (apiElements []A
 									continue
 								}
 								if txt != "" {
+									txt = strings.TrimSpace(txt)
 									txtArr = append(txtArr, txt)
 								}
 								txt = ""

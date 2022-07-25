@@ -11,10 +11,9 @@
 - 开发： <!--doc.server.proxy description=开发环境-->193.112.197.63 http://opms.huishoubao.com.cn
 - 测试：<!--doc.server.proxy description=测试环境-->xx.xx.xx.xx  http://opms.huishoubao.com.cn
 - 线上：<!--doc.server.url-->http://opms.huishoubao.com.cn
-
 <!--doc.parameter.ref=http://doc.doc/common/parameters position=body-->
 **请求参数：**
-<!--doc.parameter position=body column="name,type,required,default,description" keymap="格式:format,枚举值:enum"-->
+<!--doc.parameter prefix=_param position=body column="name,type,required,default,description" keymap="格式:format,枚举值:enum"-->
 |参数名|类型|必选|默认值|说明|
 |:----    |:---|:----- |-----   |-----   |
 |scene| string|是|-|场景<br/>枚举值:3C(3C),3C_NEW(3C_NEW)|
@@ -22,7 +21,7 @@
 |Fxy_product_name| string|是|-|闲鱼SPU 名称|
 |Fhsb_product_id| string|是|-|回收宝产品ID<br/>格式: number(数字类型) |
 
-
+<Attr name="hello world"/>
 <!--doc.server.variables=signature:joenebfhefeh -->
 
 <!--doc.server.preRequest-->
