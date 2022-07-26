@@ -21,11 +21,11 @@ func TestParse(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	apiElements, err := parsemarkdown.Parse(source)
+	xmlTags, err := parsemarkdown.Parse(source)
 	if err != nil {
 		panic(err)
 	}
-	b, err := json.Marshal(apiElements)
+	b, err := json.Marshal(xmlTags)
 	if err != nil {
 		panic(err)
 	}

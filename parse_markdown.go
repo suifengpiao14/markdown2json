@@ -2,8 +2,8 @@ package markdown2json
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -17,7 +17,7 @@ import (
 	"github.com/yuin/goldmark/text"
 )
 
-func Parse(source []byte) (apiElements ApiElements, err error) {
+func Parse(source []byte) (xmlTags XMLTags, err error) {
 
 	md := goldmark.New(
 		goldmark.WithExtensions(
@@ -36,8 +36,8 @@ func Parse(source []byte) (apiElements ApiElements, err error) {
 	)
 	reader := text.NewReader(source)
 	document := md.Parser().Parse(reader)
-	apiElements = parseApi(document, source, nil)
-	return apiElements, nil
+	xmlTags = parseNode(document, source)
+	return xmlTags, nil
 }
 
 type Attr struct {
@@ -46,6 +46,18 @@ type Attr struct {
 }
 
 type Attrs []*Attr
+
+func (attrs *Attrs) GroupByName() (group map[string]Attrs) {
+	group = make(map[string]Attrs)
+	for _, attr := range *attrs {
+		_, ok := group[attr.Name]
+		if !ok {
+			group[attr.Name] = Attrs{}
+		}
+		group[attr.Name] = append(group[attr.Name], attr)
+	}
+	return group
+}
 
 func (attrs *Attrs) GetByName(name string) (attr *Attr, ok bool) {
 	for _, at := range *attrs {
@@ -65,87 +77,233 @@ func (attrs *Attrs) PopByName(name string) (attr *Attr, ok bool) {
 	return nil, false
 }
 
-type ApiElement struct {
+func (attrs *Attrs) Uniqueue() (uniqueueAttrs Attrs) {
+	uniqueueAttrs = Attrs{}
+	keyMap := make(map[string]bool)
+	for _, at := range *attrs {
+		valueKey := at.Value
+		if len(at.Value) > 20 {
+			valueKey = Md5(at.Value)
+		}
+		key := fmt.Sprintf("%s_%s", at.Name, valueKey)
+		if _, ok := keyMap[key]; !ok {
+			keyMap[key] = true
+			uniqueueAttrs = append(uniqueueAttrs, at)
+
+		}
+	}
+	return uniqueueAttrs
+}
+
+func (attrs *Attrs) ToMap() (out map[string]string) {
+	out = make(map[string]string)
+	for name, sameNameAttr := range attrs.GroupByName() {
+		uniqueueAttrs := sameNameAttr.Uniqueue()
+		valueArr := make([]string, 0)
+		for _, attr := range uniqueueAttrs {
+			valueArr = append(valueArr, attr.Value)
+		}
+		value := strings.Join(valueArr, ",")
+		out[name] = value
+	}
+	return out
+}
+
+type XMLTag struct {
 	Tag      string `json:"tag"`
-	Name     string `json:"name"`
+	ID       string `json:"id"`
 	RefLevel string `json:"refLevel"`
-	Value    string `json:"value"`
 	Attrs    Attrs  `json:"attrs"`
 }
 
-func (apiElement *ApiElement) Clone() (clone ApiElement) {
-	clone = ApiElement{
-		Tag:   apiElement.Tag,
-		Name:  apiElement.Name,
-		Value: apiElement.Value,
+func (xmlTag *XMLTag) Clone() (clone XMLTag) {
+	clone = XMLTag{
+		Tag: xmlTag.Tag,
 	}
-	for _, attr := range apiElement.Attrs {
+	for _, attr := range xmlTag.Attrs {
 		tmpAttr := *attr
 		clone.Attrs = append(clone.Attrs, &tmpAttr)
 	}
 	return
 }
 
-func (apiElement *ApiElement) AddAttr(attr *Attr) {
-	if attr.Name == "name" && apiElement.Name == "" {
-		apiElement.Name = attr.Name
-		apiElement.Value = attr.Value
+func (xmlTag *XMLTag) AddAttr(attr *Attr) {
+	if attr.Name == "id" {
+		xmlTag.ID = attr.Value
 		return
 	}
-	apiElement.Attrs = append(apiElement.Attrs, attr)
+	xmlTag.Attrs = append(xmlTag.Attrs, attr)
 }
 
-type ApiElements []ApiElement
+type XMLTags []XMLTag
 
-func (apiElements *ApiElements) GetByName(name string) (subApiElements []ApiElement, ok bool) {
-	subApiElements = ApiElements{}
-	for _, elem := range *apiElements {
-		if elem.Name == name {
-			subApiElements = append(subApiElements, elem)
+func (xmlTags *XMLTags) GetByTag(tag string) (subXMLTags XMLTags) {
+	subXMLTags = XMLTags{}
+	for _, elem := range *xmlTags {
+		if elem.Tag == tag {
+			subXMLTags = append(subXMLTags, elem)
 		}
 	}
-	return subApiElements, len(subApiElements) > 0
+	return subXMLTags
 }
 
-//弹出找到的第一个
-func (apiElements *ApiElements) PopByName(name string) (apiElement *ApiElement, ok bool) {
-	for i, elem := range *apiElements {
-		if elem.Name == name {
-			*apiElements = append((*apiElements)[:i], (*apiElements)[i+1:]...)
-			return &elem, true
+func (xmlTags *XMLTags) GroupByTag() (group map[string]XMLTags) {
+	group = make(map[string]XMLTags)
+	for _, elem := range *xmlTags {
+		_, ok := group[elem.Tag]
+		if !ok {
+			group[elem.Tag] = make(XMLTags, 0)
+		}
+		group[elem.Tag] = append(group[elem.Tag], elem)
+	}
+	return group
+}
+
+func (xmlTags *XMLTags) GetByID(id string) (subXMLTags XMLTags) {
+	subXMLTags = XMLTags{}
+	for _, elem := range *xmlTags {
+		if elem.ID == id {
+			subXMLTags = append(subXMLTags, elem)
 		}
 	}
-	return nil, false
+	return subXMLTags
 }
 
-func parseApi(node ast.Node, source []byte, parent *ApiElement) (apiElements []ApiElement) {
-	apiElements = make([]ApiElement, 0)
-	var attribute *ApiElement
+//Format 将ID为空的xmlTag 属性赋值到ID不为空的xmlTag 中，并删除，如果不存在ID不为空的xmlTag 则直接返回ID为空的
+func (xmlTags *XMLTags) CopyEmptyID2NotEmpty() XMLTags {
+	emptyIDXmls := xmlTags.GetByEmptyID()
+	notEmptyIDXmls := xmlTags.GetByNotEmptyID()
+	if len(notEmptyIDXmls) < 1 {
+		return emptyIDXmls
+	}
+	for _, emptyIDXml := range emptyIDXmls {
+		for i, notEmptyIDXml := range notEmptyIDXmls {
+			if emptyIDXml.Tag == notEmptyIDXml.Tag { // 相同tag才复制
+				notEmptyIDXmls[i].Attrs = append(notEmptyIDXml.Attrs, emptyIDXml.Attrs...) //此处非引用，所以指定index替换
+			}
+		}
+	}
+	return notEmptyIDXmls
+}
+
+//GetByEmptyID 获取ID为空的元素,ID为空的元素，会将其attrs 全部复制到id不为空的元素中，因此最后先按tag、id聚合后执行该操作）
+func (xmlTags *XMLTags) GetByEmptyID() (emptyIDXMLTags XMLTags) {
+	return xmlTags.GetByID("")
+}
+
+//GetByNotEmptyID 获取ID不为空的元素
+func (xmlTags *XMLTags) GetByNotEmptyID() (subXMLTags XMLTags) {
+	subXMLTags = XMLTags{}
+	for _, elem := range *xmlTags {
+		if elem.ID != "" {
+			subXMLTags = append(subXMLTags, elem)
+		}
+	}
+	return subXMLTags
+}
+
+//MergeSameIDXmlTags 合并相同Tag、相同ID的记录
+func (xmlTags *XMLTags) MergeSameIDXmlTags() (newXMLTags XMLTags) {
+	newXMLTags = XMLTags{}
+	for tag, sameTagXmlTags := range xmlTags.GroupByTag() {
+		for id, sameIDXmlTags := range sameTagXmlTags.GroupByID() {
+			xmlTag := XMLTag{
+				Tag:   tag,
+				ID:    id,
+				Attrs: Attrs{},
+			}
+			for _, xmlElement := range sameIDXmlTags {
+				xmlTag.Attrs = append(xmlTag.Attrs, xmlElement.Attrs...)
+			}
+			newXMLTags = append(newXMLTags, xmlTag)
+		}
+	}
+	return newXMLTags
+}
+
+func (xmlTags *XMLTags) GroupByID() (group map[string]XMLTags) {
+	group = make(map[string]XMLTags)
+	for _, elem := range *xmlTags {
+		_, ok := group[elem.ID]
+		if !ok {
+			group[elem.ID] = make(XMLTags, 0)
+		}
+		group[elem.ID] = append(group[elem.ID], elem)
+	}
+	return group
+}
+
+func (xmlTags *XMLTags) ToMap() (out []map[string]string) {
+	out = make([]map[string]string, 0)
+	formatXMLTags := xmlTags.CopyEmptyID2NotEmpty()
+	for _, xmlTag := range formatXMLTags.MergeSameIDXmlTags() {
+
+		attrs := Attrs{}
+		attrs = append(attrs, &Attr{
+			Name:  "tag",
+			Value: xmlTag.Tag,
+		}, &Attr{
+			Name:  "id",
+			Value: xmlTag.ID,
+		})
+		attrs = append(attrs, xmlTag.Attrs...)
+		oneRecord := attrs.ToMap()
+		out = append(out, oneRecord)
+	}
+	return out
+}
+
+func (xmlTags *XMLTags) ToStruct(dst interface{}) (err error) {
+	m := xmlTags.ToMap()
+	b, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(b, dst)
+	if err != nil {
+		return err
+	}
+	return
+}
+
+func parseNode(node ast.Node, source []byte) (xmlTags []XMLTag) {
+	xmlTags = make([]XMLTag, 0)
+	var xmlTag *XMLTag
+	var emptyValueName string
 	if htmlBlock, ok := node.(*ast.HTMLBlock); ok && htmlBlock.HTMLBlockType == ast.HTMLBlockType2 {
 		htmlRaw := Node2RawText(htmlBlock, source)
-		attribute, ok = parseRawHtml(htmlRaw)
+		xmlTag, emptyValueName, ok = parseRawHtml(htmlRaw)
 		if ok {
-			if attribute.Tag == "" {
-				attribute.Tag = "unexcept block tag"
+			if xmlTag.Tag == "" {
+				err := errors.Errorf("unexcept block tag xml:%s", htmlRaw)
+				panic(err)
 			}
-			if attribute.Value == "" {
+			if emptyValueName != "" {
 				nextNode := node.NextSibling()
 				if fencedCodeNode, ok := nextNode.(*ast.FencedCodeBlock); ok {
 					attr := &Attr{
 						Name:  "language",
 						Value: string(fencedCodeNode.Language(source)),
 					}
-					attribute.Attrs = append(attribute.Attrs, attr)
-					attribute.Value = Node2RawText(nextNode, source)
+					xmlTag.Attrs = append(xmlTag.Attrs, attr)
+					value := Node2RawText(nextNode, source)
+					xmlTag.Attrs = append(xmlTag.Attrs, &Attr{
+						Name:  emptyValueName,
+						Value: value,
+					})
 				} else if tableHTML, ok := nextNode.(*extast.Table); ok {
-					columnAttr, ok := attribute.Attrs.PopByName("column")
+					if xmlTag.ID == "" {
+						err := errors.Errorf("table element required id attribute")
+						panic(err)
+					}
+					columnAttr, ok := xmlTag.Attrs.PopByName("column")
 					if !ok {
 						err := errors.Errorf("table element required coulmn attribute")
 						panic(err)
 					}
 					columnArr := strings.Split(columnAttr.Value, ",")
 					keyMap := map[string]string{}
-					keyMapAttr, ok := attribute.Attrs.PopByName("keymap")
+					keyMapAttr, ok := xmlTag.Attrs.PopByName("keymap")
 					if ok {
 						formatArr := strings.Split(keyMapAttr.Value, ",")
 						for _, kvStr := range formatArr {
@@ -178,6 +336,7 @@ func parseApi(node ast.Node, source []byte, parent *ApiElement) (apiElements []A
 
 					var subNode ast.Node
 					subNode = headNode.NextSibling()
+					i := 0
 					for {
 						if subNode == nil {
 							break
@@ -189,7 +348,8 @@ func parseApi(node ast.Node, source []byte, parent *ApiElement) (apiElements []A
 						}
 						cellIndex := 0
 						cellNode := tableRow.FirstChild()
-						rowApiElement := attribute.Clone()
+						rowXmlTag := xmlTag.Clone()
+						rowXmlTag.ID = fmt.Sprintf("%s_%d", rowXmlTag.ID, i) // 表格行，自动增加id
 						var lastAttr = &Attr{}
 						for {
 							if cellNode == nil {
@@ -201,7 +361,7 @@ func parseApi(node ast.Node, source []byte, parent *ApiElement) (apiElements []A
 								Name:  name,
 								Value: string(value),
 							}
-							rowApiElement.AddAttr(lastAttr)
+							rowXmlTag.AddAttr(lastAttr)
 							cellNode = cellNode.NextSibling()
 							cellIndex++
 						}
@@ -240,61 +400,62 @@ func parseApi(node ast.Node, source []byte, parent *ApiElement) (apiElements []A
 									if !ok {
 										continue
 									}
-									rowApiElement.AddAttr(&Attr{
+									rowXmlTag.AddAttr(&Attr{
 										Name:  key,
 										Value: value,
 									})
-								} else if attribute.Value == "" {
+								} else if txt == "" {
 									lastAttr.Value = txt
 								}
 							}
 						}
 
-						apiElements = append(apiElements, rowApiElement)
+						xmlTags = append(xmlTags, rowXmlTag)
 						subNode = subNode.NextSibling()
 					}
 				}
 
 			}
-			apiElements = append(apiElements, *attribute)
+			xmlTags = append(xmlTags, *xmlTag)
 		}
 
 	} else if rawHTML, ok := node.(*ast.RawHTML); ok {
 		txt := Node2RawText(rawHTML, source)
-		attribute, ok := parseRawHtml(string(txt))
+		xmlTag, emptyValueAttrName, ok := parseRawHtml(string(txt))
 		if ok {
-			if attribute.Value == "" {
+			if emptyValueAttrName != "" {
 				nextNode := node.NextSibling()
-				attribute.Value = Node2RawText(nextNode, source)
+				value := Node2RawText(nextNode, source)
+				xmlTag.AddAttr(&Attr{
+					Name:  emptyValueAttrName,
+					Value: value,
+				})
 			}
-			apiElements = append(apiElements, *attribute)
+			xmlTags = append(xmlTags, *xmlTag)
 		}
 
 	}
 	if node.HasChildren() {
 		firstChild := node.FirstChild()
-		subParent := parent
-		if len(apiElements) > 0 {
-			subParent = &(apiElements[len(apiElements)-1])
-		}
-		subAttr := parseApi(firstChild, source, subParent)
-		apiElements = append(apiElements, subAttr...)
+		subAttr := parseNode(firstChild, source)
+		xmlTags = append(xmlTags, subAttr...)
 	}
 	nextNode := node.NextSibling()
 	if nextNode != nil {
-		subAttr := parseApi(nextNode, source, parent)
-		apiElements = append(apiElements, subAttr...)
+		subAttr := parseNode(nextNode, source)
+		xmlTags = append(xmlTags, subAttr...)
 	}
-	return apiElements
+	return xmlTags
 }
 
-func parseRawHtml(rawText string) (attribute *ApiElement, ok bool) {
+func parseRawHtml(rawText string) (xmlTag *XMLTag, emptyValueAttrName string, ok bool) {
 
-	attribute = &ApiElement{
+	xmlTag = &XMLTag{
 		Attrs: make([]*Attr, 0),
 	}
 	rawText = strings.TrimSpace(rawText)
 	tag := strings.Trim(rawText, "<!->")
+	name := ""
 	value := ""
 	attributeStr := ""
 	index := strings.Index(tag, " ")
@@ -308,31 +469,41 @@ func parseRawHtml(rawText string) (attribute *ApiElement, ok bool) {
 		value = arr[1]
 	}
 	if !strings.HasPrefix(tag, "doc.") {
-		return nil, false
+		return nil, "", false
 	}
 	tag = strings.TrimSpace(strings.TrimPrefix(tag, "doc."))
 	if strings.Contains(tag, ".") {
 		arr := strings.SplitN(tag, ".", 2)
 		tag = arr[0]
-		attribute.Name = strings.TrimSpace(arr[1])
+		name = strings.TrimSpace(arr[1])
 	}
 
 	if attributeStr != "" {
 		txtReader := text.NewReader([]byte(attributeStr))
 		attrs, ok := parser.ParseAttributes(txtReader)
-		if ok {
-			for _, parseAttr := range attrs {
-				attr := Attr{
-					Name:  string(parseAttr.Name),
-					Value: fmt.Sprintf("%s", parseAttr.Value),
-				}
-				attribute.Attrs = append(attribute.Attrs, &attr)
+		if !ok {
+			err := errors.Errorf("convert to attribute err:%s", attributeStr)
+			panic(err)
+		}
+		for _, parseAttr := range attrs {
+			attr := Attr{
+				Name:  string(parseAttr.Name),
+				Value: fmt.Sprintf("%s", parseAttr.Value),
 			}
+			xmlTag.AddAttr(&attr)
 		}
 	}
-	attribute.Tag = tag
-	attribute.Value = value
-	return attribute, true
+	if value == "" {
+		emptyValueAttrName = name
+	} else {
+		attr := Attr{
+			Name:  name,
+			Value: value,
+		}
+		xmlTag.Attrs = append(xmlTag.Attrs, &attr)
+	}
+	xmlTag.Tag = tag
+	return xmlTag, emptyValueAttrName, true
 }
 
 func Node2RawText(node ast.Node, source []byte) (out string) {
@@ -400,89 +571,4 @@ func (examples Examples) Add(example *Example) (newExamples Examples) {
 	}
 	examples = append(examples, example)
 	return examples
-}
-
-type Api struct {
-	URL        string   `json:"url"`
-	Method     string   `json:"metod"`
-	Header     []*KV    `json:"header"`
-	Query      string   `json:"query"`
-	Body       string   `json:"body"`
-	PreRequest string   `json:"preRequest"`
-	Examples   Examples `json:"examples"`
-}
-
-const (
-	API_URI         = "api.uri"
-	API_HOST        = "api.host"
-	API_METHOD      = "api.method"
-	API_HEADER      = "api.header"
-	API_QUERY       = "api.query"
-	API_BODY        = "api.body"
-	API_PRE_REQUEST = "api.preRequest"
-	API_EXAMPLE     = "api.example"
-)
-
-func FormatApi(apiElement []*ApiElement) (api *Api, err error) {
-	api = &Api{
-		Header: make([]*KV, 0),
-	}
-	u := &url.URL{}
-	uv := url.Values{}
-	uri := ""
-	for _, apiAttr := range apiElement {
-		switch apiAttr.Name {
-		case API_URI:
-			uri = apiAttr.Value
-		case API_HOST:
-			if apiAttr.Value[:4] == "http" {
-				u, err = url.Parse(apiAttr.Value)
-				if err != nil {
-					return nil, err
-				}
-			}
-		case API_QUERY:
-			uv, err = url.ParseQuery(apiAttr.Value)
-			if err != nil {
-				return nil, err
-			}
-		case API_BODY:
-			api.Body = apiAttr.Value
-		case API_METHOD:
-			api.Method = apiAttr.Value
-		case API_HEADER:
-			index := strings.Index(apiAttr.Value, ":")
-			kv := &KV{}
-			if index > -1 {
-				kv.Name = apiAttr.Value[:index]
-				kv.Value = apiAttr.Value[index+1:]
-			}
-			api.Header = append(api.Header, kv)
-		case API_PRE_REQUEST:
-			api.PreRequest = apiAttr.Value
-		case API_EXAMPLE:
-			nameAttr, ok := apiAttr.Attrs.GetByName("name")
-			if !ok {
-				nameAttr = &Attr{}
-			}
-			name := nameAttr.Value
-			example, ok := api.Examples.GetByName(name)
-			if !ok {
-				example = &Example{
-					Name: name,
-				}
-			}
-
-			api.Examples.Add(example)
-
-		}
-	}
-	if uri != "" {
-		u.Path = uri
-	}
-	if len(uv) > 0 {
-		u.RawQuery = uv.Encode()
-	}
-	api.URL = u.String()
-	return api, nil
 }
