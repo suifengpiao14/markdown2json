@@ -3,12 +3,9 @@ package markdown2json
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"net/url"
-	"os"
 	"strings"
 
-	"github.com/antchfx/xmlquery"
 	"github.com/pkg/errors"
 	"github.com/yuin/goldmark"
 	meta "github.com/yuin/goldmark-meta"
@@ -20,48 +17,8 @@ import (
 	"github.com/yuin/goldmark/text"
 )
 
-func ParseMarkdown(source []byte) (out string) {
-	md := goldmark.New(
-		goldmark.WithExtensions(extension.GFM),
-		goldmark.WithParserOptions(
-			parser.WithAutoHeadingID(),
-		),
-		goldmark.WithRendererOptions(
-			html.WithHardWraps(),
-			html.WithXHTML(),
-			html.WithUnsafe(),
-		),
-	)
-	var buf bytes.Buffer
-	if err := md.Convert(source, &buf); err != nil {
-		panic(err)
-	}
-	return buf.String()
-}
+func Parse(source []byte) (apiElements ApiElements, err error) {
 
-func QueryXML(xhtml string) (err error) {
-	doc, err := xmlquery.Parse(strings.NewReader(xhtml))
-	if err != nil {
-		return err
-	}
-	list := xmlquery.Find(doc, ".//comment()")
-	for _, comment := range list {
-
-		fmt.Println(comment.Data)
-	}
-
-	return nil
-}
-
-func Parse(mdxFile string) (apiElements ApiElements, err error) {
-	fd, err := os.OpenFile(mdxFile, os.O_RDONLY, os.ModePerm)
-	if err != nil {
-		return nil, err
-	}
-	source, err := io.ReadAll(fd)
-	if err != nil {
-		return nil, err
-	}
 	md := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -80,13 +37,7 @@ func Parse(mdxFile string) (apiElements ApiElements, err error) {
 	reader := text.NewReader(source)
 	document := md.Parser().Parse(reader)
 	apiElements = parseApi(document, source, nil)
-	for {
-		refApiElement, ok := apiElements.PopByName("ref")
-		if !ok {
-			return apiElements, nil
-		}
-		fmt.Printf("todo ,get content from %s", refApiElement.Value)
-	}
+	return apiElements, nil
 }
 
 type Attr struct {
