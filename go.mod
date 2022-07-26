@@ -1,4 +1,4 @@
-module github.com/suifengpiao_14/markdown2json
+module github.com/suifengpiao14/markdown2json
 
 go 1.17
 
