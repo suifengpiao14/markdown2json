@@ -118,7 +118,9 @@ type XMLTag struct {
 
 func (xmlTag *XMLTag) Clone() (clone XMLTag) {
 	clone = XMLTag{
-		Tag: xmlTag.Tag,
+		ID:    xmlTag.ID,
+		Tag:   xmlTag.Tag,
+		Attrs: Attrs{},
 	}
 	for _, attr := range xmlTag.Attrs {
 		tmpAttr := *attr
@@ -268,17 +270,15 @@ func (xmlTags *XMLTags) ToStruct(dst interface{}) (err error) {
 
 func parseNode(node ast.Node, source []byte) (xmlTags []XMLTag) {
 	xmlTags = make([]XMLTag, 0)
-	var xmlTag *XMLTag
-	var emptyValueName string
 	if htmlBlock, ok := node.(*ast.HTMLBlock); ok && htmlBlock.HTMLBlockType == ast.HTMLBlockType2 {
 		htmlRaw := Node2RawText(htmlBlock, source)
-		xmlTag, emptyValueName, ok = parseRawHtml(htmlRaw)
+		xmlTag, baseAttr, ok := parseRawHtml(htmlRaw)
 		if ok {
 			if xmlTag.Tag == "" {
 				err := errors.Errorf("unexcept block tag xml:%s", htmlRaw)
 				panic(err)
 			}
-			if emptyValueName != "" {
+			if baseAttr.Value == "" {
 				nextNode := node.NextSibling()
 				if fencedCodeNode, ok := nextNode.(*ast.FencedCodeBlock); ok {
 					attr := &Attr{
@@ -288,7 +288,7 @@ func parseNode(node ast.Node, source []byte) (xmlTags []XMLTag) {
 					xmlTag.Attrs = append(xmlTag.Attrs, attr)
 					value := Node2RawText(nextNode, source)
 					xmlTag.Attrs = append(xmlTag.Attrs, &Attr{
-						Name:  emptyValueName,
+						Name:  baseAttr.Name,
 						Value: value,
 					})
 				} else if tableHTML, ok := nextNode.(*extast.Table); ok {
@@ -412,6 +412,7 @@ func parseNode(node ast.Node, source []byte) (xmlTags []XMLTag) {
 
 						xmlTags = append(xmlTags, rowXmlTag)
 						subNode = subNode.NextSibling()
+						i++
 					}
 				}
 
@@ -421,13 +422,13 @@ func parseNode(node ast.Node, source []byte) (xmlTags []XMLTag) {
 
 	} else if rawHTML, ok := node.(*ast.RawHTML); ok {
 		txt := Node2RawText(rawHTML, source)
-		xmlTag, emptyValueAttrName, ok := parseRawHtml(string(txt))
+		xmlTag, baseAttr, ok := parseRawHtml(string(txt))
 		if ok {
-			if emptyValueAttrName != "" {
+			if baseAttr.Value == "" {
 				nextNode := node.NextSibling()
 				value := Node2RawText(nextNode, source)
 				xmlTag.AddAttr(&Attr{
-					Name:  emptyValueAttrName,
+					Name:  baseAttr.Name,
 					Value: value,
 				})
 			}
@@ -448,15 +449,14 @@ func parseNode(node ast.Node, source []byte) (xmlTags []XMLTag) {
 	return xmlTags
 }
 
-func parseRawHtml(rawText string) (xmlTag *XMLTag, emptyValueAttrName string, ok bool) {
+func parseRawHtml(rawText string) (xmlTag *XMLTag, baseAttr *Attr, ok bool) {
 
 	xmlTag = &XMLTag{
 		Attrs: make([]*Attr, 0),
 	}
+	baseAttr = &Attr{}
 	rawText = strings.TrimSpace(rawText)
 	tag := strings.Trim(rawText, "<!->")
-	name := ""
-	value := ""
 	attributeStr := ""
 	index := strings.Index(tag, " ")
 	if index > -1 {
@@ -466,16 +466,16 @@ func parseRawHtml(rawText string) (xmlTag *XMLTag, emptyValueAttrName string, ok
 	if strings.Contains(tag, "=") {
 		arr := strings.SplitN(tag, "=", 2)
 		tag = arr[0]
-		value = arr[1]
+		baseAttr.Value = arr[1]
 	}
 	if !strings.HasPrefix(tag, "doc.") {
-		return nil, "", false
+		return nil, nil, false
 	}
 	tag = strings.TrimSpace(strings.TrimPrefix(tag, "doc."))
 	if strings.Contains(tag, ".") {
 		arr := strings.SplitN(tag, ".", 2)
 		tag = arr[0]
-		name = strings.TrimSpace(arr[1])
+		baseAttr.Name = strings.TrimSpace(arr[1])
 	}
 
 	if attributeStr != "" {
@@ -493,17 +493,11 @@ func parseRawHtml(rawText string) (xmlTag *XMLTag, emptyValueAttrName string, ok
 			xmlTag.AddAttr(&attr)
 		}
 	}
-	if value == "" {
-		emptyValueAttrName = name
-	} else {
-		attr := Attr{
-			Name:  name,
-			Value: value,
-		}
-		xmlTag.Attrs = append(xmlTag.Attrs, &attr)
+	if baseAttr.Value != "" {
+		xmlTag.Attrs = append(xmlTag.Attrs, baseAttr)
 	}
 	xmlTag.Tag = tag
-	return xmlTag, emptyValueAttrName, true
+	return xmlTag, baseAttr, true
 }
 
 func Node2RawText(node ast.Node, source []byte) (out string) {
