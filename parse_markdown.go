@@ -17,6 +17,10 @@ import (
 	"github.com/yuin/goldmark/text"
 )
 
+const (
+	NEXT_SIBLING_NAME = "nextsiblingName"
+)
+
 func Parse(source []byte) (xmlTags XMLTags, err error) {
 
 	md := goldmark.New(
@@ -272,13 +276,14 @@ func parseNode(node ast.Node, source []byte) (xmlTags []XMLTag) {
 	xmlTags = make([]XMLTag, 0)
 	if htmlBlock, ok := node.(*ast.HTMLBlock); ok && htmlBlock.HTMLBlockType == ast.HTMLBlockType2 {
 		htmlRaw := Node2RawText(htmlBlock, source)
-		xmlTag, baseAttr, ok := parseRawHtml(htmlRaw)
+		xmlTag, ok := parseRawHtml(htmlRaw)
 		if ok {
 			if xmlTag.Tag == "" {
 				err := errors.Errorf("unexcept block tag xml:%s", htmlRaw)
 				panic(err)
 			}
-			if baseAttr.Value == "" {
+			nextsiblingAttr, exists := xmlTag.Attrs.GetByName(NEXT_SIBLING_NAME)
+			if exists {
 				nextNode := node.NextSibling()
 				if fencedCodeNode, ok := nextNode.(*ast.FencedCodeBlock); ok {
 					attr := &Attr{
@@ -288,7 +293,7 @@ func parseNode(node ast.Node, source []byte) (xmlTags []XMLTag) {
 					xmlTag.Attrs = append(xmlTag.Attrs, attr)
 					value := Node2RawText(nextNode, source)
 					xmlTag.Attrs = append(xmlTag.Attrs, &Attr{
-						Name:  baseAttr.Name,
+						Name:  nextsiblingAttr.Value,
 						Value: value,
 					})
 				} else if tableHTML, ok := nextNode.(*extast.Table); ok {
@@ -422,13 +427,14 @@ func parseNode(node ast.Node, source []byte) (xmlTags []XMLTag) {
 
 	} else if rawHTML, ok := node.(*ast.RawHTML); ok {
 		txt := Node2RawText(rawHTML, source)
-		xmlTag, baseAttr, ok := parseRawHtml(string(txt))
+		xmlTag, ok := parseRawHtml(string(txt))
 		if ok {
-			if baseAttr.Value == "" {
+			nextsiblingAttr, exists := xmlTag.Attrs.GetByName(NEXT_SIBLING_NAME)
+			if exists {
 				nextNode := node.NextSibling()
 				value := Node2RawText(nextNode, source)
 				xmlTag.AddAttr(&Attr{
-					Name:  baseAttr.Name,
+					Name:  nextsiblingAttr.Value,
 					Value: value,
 				})
 			}
@@ -449,40 +455,46 @@ func parseNode(node ast.Node, source []byte) (xmlTags []XMLTag) {
 	return xmlTags
 }
 
-func parseRawHtml(rawText string) (xmlTag *XMLTag, baseAttr *Attr, ok bool) {
+func parseRawHtml(rawText string) (xmlTag *XMLTag, ok bool) {
 
 	xmlTag = &XMLTag{
 		Attrs: make([]*Attr, 0),
 	}
-	baseAttr = &Attr{}
 	rawText = strings.TrimSpace(rawText)
 	tag := strings.Trim(rawText, "<!->")
 	attributeStr := ""
 	index := strings.Index(tag, " ")
 	if index > -1 {
-		attributeStr = fmt.Sprintf("{%s}", tag[index+1:])
+		attributeStr = tag[index+1:]
 		tag = tag[:index]
 	}
-	if strings.Contains(tag, "=") {
-		arr := strings.SplitN(tag, "=", 2)
-		tag = arr[0]
-		baseAttr.Value = arr[1]
-	}
-	if !strings.HasPrefix(tag, "doc.") {
-		return nil, nil, false
-	}
-	tag = strings.TrimSpace(strings.TrimPrefix(tag, "doc."))
 	if strings.Contains(tag, ".") {
-		arr := strings.SplitN(tag, ".", 2)
-		tag = arr[0]
-		baseAttr.Name = strings.TrimSpace(arr[1])
-	}
+		arr := strings.SplitN(tag, ".", 3) // <!--doc.parameter.ref="http://doc.doc/common/parameters" position=body id=requestParamter --> 限定最多分割成3段
+		module := ""
+		atStr := `""` // 默认等于空字符串
+		for i, v := range arr {
+			switch i {
+			case 0:
+				tag = v
+			case 1:
+				module = v
+			case 2:
+				atStr = v
+			}
+		}
 
+		// 对于 <!--doc.api.attrname --> 格式，增加属性NEXT_SIBLING_NAME=attrname
+		//对于  <!--doc.parameter position=body --> 格式  增加属性NEXT_SIBLING_NAME=""
+		if !strings.Contains(atStr, "=") {
+			atStr = fmt.Sprintf("%s=%s", NEXT_SIBLING_NAME, atStr)
+		}
+		attributeStr = fmt.Sprintf("{module=%s %s %s}", module, atStr, attributeStr)
+	}
 	if attributeStr != "" {
 		txtReader := text.NewReader([]byte(attributeStr))
 		attrs, ok := parser.ParseAttributes(txtReader)
 		if !ok {
-			err := errors.Errorf("convert to attribute err:%s", attributeStr)
+			err := errors.Errorf("convert to attribute err:%s,rawTxt:%s", attributeStr, rawText)
 			panic(err)
 		}
 		for _, parseAttr := range attrs {
@@ -493,11 +505,8 @@ func parseRawHtml(rawText string) (xmlTag *XMLTag, baseAttr *Attr, ok bool) {
 			xmlTag.AddAttr(&attr)
 		}
 	}
-	if baseAttr.Value != "" {
-		xmlTag.Attrs = append(xmlTag.Attrs, baseAttr)
-	}
 	xmlTag.Tag = tag
-	return xmlTag, baseAttr, true
+	return xmlTag, true
 }
 
 func Node2RawText(node ast.Node, source []byte) (out string) {

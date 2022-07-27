@@ -8,12 +8,12 @@
 - 请求方法 :<!--doc.api.method--> POST
 
 **环境：**
-- 开发： <!--doc.server.proxy description=开发环境-->193.112.197.63 http://opms.huishoubao.com.cn
-- 测试：<!--doc.server.proxy description=测试环境-->xx.xx.xx.xx  http://opms.huishoubao.com.cn
+- 开发： <!--doc.server.proxy id=dev description="开发环境"-->193.112.197.63 http://opms.huishoubao.com.cn
+- 测试：<!--doc.server.proxy id=test description="测试环境"-->xx.xx.xx.xx  http://opms.huishoubao.com.cn
 - 线上：<!--doc.server.url-->http://opms.huishoubao.com.cn
-<!--doc.parameter.ref=http://doc.doc/common/parameters position=body-->
+<!--doc.parameter.ref="http://doc.doc/common/parameters" position=body id=requestParamter -->
 **请求参数：**
-<!--doc.parameter prefix=_param position=body column="name,type,required,default,description" keymap="格式:format,枚举值:enum"-->
+<!--doc.parameter id=requestParamter prefix=_param position=body column="name,type,required,default,description" keymap="格式:format,枚举值:enum"-->
 |参数名|类型|必选|默认值|说明|
 |:----    |:---|:----- |-----   |-----   |
 |scene| string|是|-|场景<br/>枚举值:3C(3C),3C_NEW(3C_NEW)|
@@ -51,7 +51,7 @@ options.headers['HSB-OPENAPI-SIGNATURE']= String(singnature);
 ```
 
 **返回结果：**
-<!--doc.parameter position=body httpStatus="200" column="name,type,description"-->
+<!--doc.parameter id=responseParameter position=body httpStatus="200" column="name,type,description"-->
 |参数名|类型|说明|
 |:-----  |:-----|----- |
 |_ret |string   |0成功 1失败  |

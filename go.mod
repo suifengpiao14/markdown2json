@@ -11,8 +11,9 @@ require (
 
 require (
 	github.com/antchfx/xpath v1.2.1 // indirect
+	github.com/basgys/goxml2json v1.1.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
-	golang.org/x/net v0.0.0-20200813134508-3edf25e44fcc // indirect
-	golang.org/x/text v0.3.0 // indirect
+	golang.org/x/net v0.0.0-20220726230323-06994584191e // indirect
+	golang.org/x/text v0.3.7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
