@@ -13,7 +13,7 @@
 - 线上：<!--doc.server.url-->http://opms.huishoubao.com.cn
 <!--doc.parameter.ref="http://doc.doc/common/parameters" position=body id=requestParamter -->
 **请求参数：**
-<!--doc.parameter id=requestParamter prefix=_param position=body column="name,type,required,default,description" keymap="格式:format,枚举值:enum"-->
+<!--doc.parameter id=requestParamter fullname="_param.$name" position=body column="name,type,required,default,description" keymap="格式:format,枚举值:enum"-->
 |参数名|类型|必选|默认值|说明|
 |:----    |:---|:----- |-----   |-----   |
 |scene| string|是|-|场景<br/>枚举值:3C(3C),3C_NEW(3C_NEW)|
