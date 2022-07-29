@@ -38,6 +38,12 @@ func GetRecords() parsemarkdown.Records {
 	return records
 }
 
+func TestGetRefs(t *testing.T) {
+	records := GetRecords()
+	refRecords := records.GetRefs()
+	fmt.Printf(refRecords.String())
+}
+
 func TestMerge(t *testing.T) {
 	records := GetRecords()
 	newRecords := records.Format()
