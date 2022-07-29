@@ -47,5 +47,9 @@ func TestMerge(t *testing.T) {
 	}
 	str := string(b)
 	fmt.Println(str)
-
+}
+func TestRecordString(t *testing.T) {
+	records := GetRecords()
+	str := records.Filter(parsemarkdown.KV{Key: parsemarkdown.KEY_DB, Value: "doc"}).String()
+	fmt.Println(str)
 }

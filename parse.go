@@ -3,6 +3,7 @@ package markdown2json
 // 只负责解析markdown 到[]*Record 格式，不负责数据整合及有效性验证
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -30,6 +31,7 @@ const (
 	KEY_OFFSET                   = "_offset" //内联元素指定截取字符串位置
 	KEY_LENGTH                   = "_length" //内联元素指定截取字符串长度
 	ID_SEPARATOR                 = "-"
+	KEY_REF                      = "ref"
 )
 
 func Parse(source []byte) (records Records, err error) {
@@ -63,12 +65,24 @@ type Record []*KV
 
 type Records []*Record
 
-func (records Records) MoveInternalKey(newRecords Records) {
+func (records Records) MoveInternalKey() (newRecords Records) {
 	newRecords = make(Records, 0)
 	for _, record := range records {
 		newRecord := record.MoveInternalKey()
 		newRecords = append(newRecords, &newRecord)
 	}
+	return newRecords
+}
+func (records Records) GetRefs() (refRecords Records) {
+	refRecords = make(Records, 0)
+	for _, record := range records {
+		_, ok := record.GetKV(KEY_REF)
+		if ok {
+			refRecords = append(refRecords, record)
+		}
+
+	}
+	return refRecords
 }
 
 func (records Records) Format() (newRecords Records) {
@@ -108,6 +122,45 @@ func (records Records) Format() (newRecords Records) {
 	return newRecords
 }
 
+func (records Records) Filter(kv KV) (subRecords Records) {
+	subRecords = make(Records, 0)
+	for _, record := range records {
+		eKv, ok := record.GetKV(kv.Key)
+		if ok && eKv.Value == kv.Value {
+			subRecords = append(subRecords, record)
+		}
+	}
+	return subRecords
+}
+
+func (records Records) String() (out string) {
+	newRecords := records.Format().MoveInternalKey()
+	arr := make([]map[string]string, 0)
+	for _, record := range newRecords {
+		mp := make(map[string]string)
+		for _, kv := range *record {
+			mp[kv.Key] = kv.Value
+		}
+		arr = append(arr, mp)
+	}
+	b, err := json.Marshal(arr)
+	if err != nil {
+		panic(err)
+	}
+	out = string(b)
+	return out
+}
+
+func (records Records) GetByIndex(index string) (newRecords Records) {
+	newRecords = make(Records, 0)
+	for _, record := range records {
+		if record.GetIndex() == index {
+			newRecords = append(newRecords, record)
+		}
+	}
+	return newRecords
+}
+
 //MergeRecords 将多条记录中的kv，按保留最早出现的原则，合并成一条
 func MergeRecords(records ...*Record) (newRecord Record) {
 	kvMap := map[string]*KV{}
@@ -131,16 +184,6 @@ func MergeRecords(records ...*Record) (newRecord Record) {
 		newRecord = append(newRecord, kv)
 	}
 	return newRecord
-}
-
-func (records Records) GetByIndex(index string) (newRecords Records) {
-	newRecords = make(Records, 0)
-	for _, record := range records {
-		if record.GetIndex() == index {
-			newRecords = append(newRecords, record)
-		}
-	}
-	return newRecords
 }
 
 func (record *Record) AddKV(kv KV) {
@@ -192,15 +235,6 @@ func (record *Record) GetIndex() (index string) {
 	return ""
 }
 
-//GetIndex  获取记录的 父类key
-func GetParentIndex(index string) (parentIndex string) {
-	p := strings.LastIndex(index, ID_SEPARATOR)
-	if p > -1 {
-		return index[:p]
-	}
-	return ""
-}
-
 // 克隆基本信息
 func (record *Record) Clone() (newRecord Record) {
 	newRecord = Record{}
@@ -247,6 +281,15 @@ func CloneTabHeader(record Record) Record {
 		newRecord = append(newRecord, &newKv)
 	}
 	return newRecord
+}
+
+//GetIndex  获取记录的 父类key
+func GetParentIndex(index string) (parentIndex string) {
+	p := strings.LastIndex(index, ID_SEPARATOR)
+	if p > -1 {
+		return index[:p]
+	}
+	return ""
 }
 
 func parseNode(node ast.Node, source []byte) (records Records) {
