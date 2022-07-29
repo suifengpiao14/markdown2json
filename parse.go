@@ -4,6 +4,7 @@ package markdown2json
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,16 +21,18 @@ import (
 )
 
 const (
-	NEXT_SIBLING_COLUMN_KEY = "_nextsiblingName_"
-	KEY_ID                  = "id"
-	KEY_COLUMN              = "column"
-	KEY_DB                  = "db"
-	KEY_TABLE               = "table"
-	KEY_OFFSET              = "_offset" //内联元素指定截取字符串位置
-	KEY_LENGTH              = "_length" //内联元素指定截取字符串长度
+	KEY_INER_NEXT_SIBLING_COLUMN = "_nextsiblingName_"
+	KEY_INER_INDEX               = "_index_"
+	KEY_ID                       = "id"
+	KEY_COLUMN                   = "column"
+	KEY_DB                       = "db"
+	KEY_TABLE                    = "table"
+	KEY_OFFSET                   = "_offset" //内联元素指定截取字符串位置
+	KEY_LENGTH                   = "_length" //内联元素指定截取字符串长度
+	ID_SEPARATOR                 = "-"
 )
 
-func Parse(source []byte) (records []*Record, err error) {
+func Parse(source []byte) (records Records, err error) {
 	md := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -58,31 +61,180 @@ type KV struct {
 
 type Record []*KV
 
-func (record *Record) AdddKV(kv KV) {
+type Records []*Record
+
+func (records Records) MoveInternalKey(newRecords Records) {
+	newRecords = make(Records, 0)
+	for _, record := range records {
+		newRecord := record.MoveInternalKey()
+		newRecords = append(newRecords, &newRecord)
+	}
+}
+
+func (records Records) Format() (newRecords Records) {
+	newRecords = make(Records, 0)
+	group := map[string]Records{} // 按照index 分组
+	for _, record := range records {
+		index := record.GetIndex()
+		_, ok := group[index]
+		if !ok {
+			group[index] = make(Records, 0)
+		}
+		group[index] = append(group[index], record)
+	}
+	// 相同index 合并
+	tmpNewRecords := Records{}
+	for _, sameIndexRecords := range group {
+		newRecord := MergeRecords(sameIndexRecords...)
+		tmpNewRecords = append(tmpNewRecords, &newRecord)
+	}
+	// 合并父类
+	for _, record := range tmpNewRecords {
+		mergeRecord := Records{}
+		mergeRecord = append(mergeRecord, record)
+		index := record.GetIndex()
+		parentIndex := GetParentIndex(index)
+		for {
+			if parentIndex == "" {
+				break
+			}
+			sameIndexParents := tmpNewRecords.GetByIndex(parentIndex)
+			mergeRecord = append(mergeRecord, sameIndexParents...)
+			parentIndex = GetParentIndex(parentIndex)
+		}
+		newRecord := MergeRecords(mergeRecord...)
+		newRecords = append(newRecords, &newRecord)
+	}
+	return newRecords
+}
+
+//MergeRecords 将多条记录中的kv，按保留最早出现的原则，合并成一条
+func MergeRecords(records ...*Record) (newRecord Record) {
+	kvMap := map[string]*KV{}
+	for _, record := range records {
+		for _, kv := range *record {
+			okv, ok := kvMap[kv.Key]
+			if !ok { // 不存在，直接填充后跳过
+				kvMap[kv.Key] = kv
+				continue
+			}
+			isArr := strings.HasSuffix(kv.Key, "[]")
+			if !isArr {
+				continue // 非数组，跳过
+			}
+			okv.Value = fmt.Sprintf("%s,%s", okv.Value, kv.Value)
+			kvMap[kv.Key] = okv
+		}
+	}
+	newRecord = Record{}
+	for _, kv := range kvMap {
+		newRecord = append(newRecord, kv)
+	}
+	return newRecord
+}
+
+func (records Records) GetByIndex(index string) (newRecords Records) {
+	newRecords = make(Records, 0)
+	for _, record := range records {
+		if record.GetIndex() == index {
+			newRecords = append(newRecords, record)
+		}
+	}
+	return newRecords
+}
+
+func (record *Record) AddKV(kv KV) {
 	*record = append(*record, &kv)
+	if !(kv.Key == KEY_DB || kv.Key == KEY_TABLE || kv.Key == KEY_ID) {
+		return
+	}
+	// add index
+	dbValue := ""
+	tableValue := ""
+	idValue := ""
+	if db, ok := record.GetKV(KEY_DB); ok {
+		dbValue = db.Value
+	}
+	if table, ok := record.GetKV(KEY_TABLE); ok {
+		tableValue = table.Value
+	}
+	if id, ok := record.GetKV(KEY_ID); ok {
+		idValue = id.Value
+	}
+	index := fmt.Sprintf("%s%s%s%s%s", dbValue, ID_SEPARATOR, tableValue, ID_SEPARATOR, idValue)
+	index = strings.Trim(index, ID_SEPARATOR)
+	record.ResetKV(KV{
+		Key:   KEY_INER_INDEX,
+		Value: index,
+	})
+	return
+
+}
+
+//MoveInternalKey 删除内部使用的KV
+func (record *Record) MoveInternalKey() (new Record) {
+	newRecord := Record{}
+	for _, kv := range *record {
+		switch kv.Key {
+		case KEY_INER_NEXT_SIBLING_COLUMN, KEY_INER_INDEX: // 删除内部使用的KV
+		default:
+			newRecord = append(newRecord, kv)
+		}
+	}
+	return newRecord
+}
+
+//GetIndex  获取记录的key
+func (record *Record) GetIndex() (index string) {
+	if indexAttr, ok := record.GetKV(KEY_INER_INDEX); ok {
+		return indexAttr.Value
+	}
+	return ""
+}
+
+//GetIndex  获取记录的 父类key
+func GetParentIndex(index string) (parentIndex string) {
+	p := strings.LastIndex(index, ID_SEPARATOR)
+	if p > -1 {
+		return index[:p]
+	}
+	return ""
 }
 
 // 克隆基本信息
 func (record *Record) Clone() (newRecord Record) {
 	newRecord = Record{}
-	dbAttr, ok := record.GetKVFirst(KEY_DB)
+	dbAttr, ok := record.GetKV(KEY_DB)
 	if ok {
 		newRecord = append(newRecord, dbAttr)
 	}
-	tableAttr, ok := record.GetKVFirst(KEY_TABLE)
+	tableAttr, ok := record.GetKV(KEY_TABLE)
 	if ok {
 		newRecord = append(newRecord, tableAttr)
 	}
 	return newRecord
 }
 
-func (record *Record) GetKVFirst(key string) (kv *KV, ok bool) {
+func (record *Record) GetKV(key string) (kv *KV, ok bool) {
 	for _, kv := range *record {
 		if kv.Key == key {
 			return kv, true
 		}
 	}
 	return nil, false
+}
+
+func (record *Record) ResetKV(kv KV) {
+	exists := false
+	for _, okv := range *record {
+		if okv.Key == kv.Key {
+			exists = true
+			okv.Value = kv.Value
+		}
+	}
+	if !exists {
+		*record = append(*record, &kv)
+	}
 }
 
 func CloneTabHeader(record Record) Record {
@@ -97,13 +249,13 @@ func CloneTabHeader(record Record) Record {
 	return newRecord
 }
 
-func parseNode(node ast.Node, source []byte) (records []*Record) {
-	records = make([]*Record, 0)
+func parseNode(node ast.Node, source []byte) (records Records) {
+	records = Records{}
 	if htmlBlock, ok := node.(*ast.HTMLBlock); ok && htmlBlock.HTMLBlockType == ast.HTMLBlockType2 {
 		htmlRaw := Node2RawText(htmlBlock, source)
 		record, ok := rawHtml2Record(htmlRaw)
 		if ok {
-			nextsiblingAttr, exists := record.GetKVFirst(NEXT_SIBLING_COLUMN_KEY)
+			nextsiblingAttr, exists := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
 			if exists {
 				nextNode := node.NextSibling()
 				if fencedCodeNode, ok := nextNode.(*ast.FencedCodeBlock); ok {
@@ -111,19 +263,19 @@ func parseNode(node ast.Node, source []byte) (records []*Record) {
 						Key:   "language",
 						Value: string(fencedCodeNode.Language(source)),
 					}
-					record.AdddKV(*attr)
+					record.AddKV(*attr)
 					value := Node2RawText(nextNode, source)
-					record.AdddKV(KV{
+					record.AddKV(KV{
 						Key:   nextsiblingAttr.Value,
 						Value: value,
 					})
 				} else if tableHTML, ok := nextNode.(*extast.Table); ok {
-					idAttr, ok := record.GetKVFirst(KEY_ID)
+					idAttr, ok := record.GetKV(KEY_ID)
 					if !ok {
 						err := errors.Errorf("table element required %s attribute", KEY_ID)
 						panic(err)
 					}
-					columnAttr, ok := record.GetKVFirst(KEY_COLUMN)
+					columnAttr, ok := record.GetKV(KEY_COLUMN)
 					if !ok {
 						err := errors.Errorf("table element required %s attribute", KEY_COLUMN)
 						panic(err)
@@ -168,20 +320,20 @@ func parseNode(node ast.Node, source []byte) (records []*Record) {
 								Key:   name,
 								Value: string(value),
 							}
-							newRecord.AdddKV(kv)
+							newRecord.AddKV(kv)
 							cellNode = cellNode.NextSibling()
 							cellIndex++
 						}
-						idValue := fmt.Sprintf("%s_%d", idAttr.Value, i)
-						firstAttr, ok := newRecord.GetKVFirst(firstColumnName)
+						idValue := fmt.Sprintf("%s%s%d", idAttr.Value, ID_SEPARATOR, i)
+						firstAttr, ok := newRecord.GetKV(firstColumnName)
 						if ok {
-							idValue = fmt.Sprintf("%s_%s", idAttr.Value, firstAttr.Value)
+							idValue = fmt.Sprintf("%s%s%s", idAttr.Value, ID_SEPARATOR, firstAttr.Value)
 						}
 						idKV := KV{
 							Key:   KEY_ID,
 							Value: idValue,
 						}
-						newRecord.AdddKV(idKV)
+						newRecord.AddKV(idKV)
 						records = append(records, &newRecord)
 						subNode = subNode.NextSibling()
 						i++
@@ -197,11 +349,11 @@ func parseNode(node ast.Node, source []byte) (records []*Record) {
 		txt := Node2RawText(rawHTML, source)
 		record, ok := rawHtml2Record(txt)
 		if ok {
-			nextsiblingAttr, exists := record.GetKVFirst(NEXT_SIBLING_COLUMN_KEY)
+			nextsiblingAttr, exists := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
 			if exists {
 				nextNode := node.NextSibling()
 				value := Node2RawText(nextNode, source)
-				lenAttr, ok := record.GetKVFirst(KEY_LENGTH)
+				lenAttr, ok := record.GetKV(KEY_LENGTH)
 				if ok {
 					l, err := strconv.Atoi(lenAttr.Value)
 					if err != nil {
@@ -214,7 +366,7 @@ func parseNode(node ast.Node, source []byte) (records []*Record) {
 					}
 					value = value[:l+1]
 				}
-				record.AdddKV(KV{
+				record.AddKV(KV{
 					Key:   nextsiblingAttr.Value,
 					Value: value,
 				})
@@ -233,36 +385,35 @@ func parseNode(node ast.Node, source []byte) (records []*Record) {
 		records = append(records, subRecords...)
 	}
 
-	for _, record := range records {
-		newRecord := Record{}
-		for _, kv := range *record {
-			switch kv.Key {
-			case NEXT_SIBLING_COLUMN_KEY: // 删除内部使用的KV
-			default:
-				newRecord = append(newRecord, kv)
-			}
-		}
-		*record = newRecord
-	}
-
 	return records
 }
 
+const (
+	ARRAY_SUFFIX = "__array__"
+)
+
 var (
+	regArrWithValue  = regexp.MustCompile(`(\[\]) *=`)
+	replArrWithValue = fmt.Sprintf(`%s=`, ARRAY_SUFFIX)
+	regArrWithName   = regexp.MustCompile(`([\w\.]+)\[\] `)
+	replArrWithName  = fmt.Sprintf(`$1%s`, ARRAY_SUFFIX)
+
 	regWithValue  = regexp.MustCompile(`(\w+)\.(\w+)\.(\w+)=(.*)`)
 	replWithValue = fmt.Sprintf(`%s=$1 %s=$2 $3=$4`, KEY_DB, KEY_TABLE)
 
 	regWithName  = regexp.MustCompile(`(\w+)\.(\w+)\.(\w+)(.*)`)
-	replWithName = fmt.Sprintf(`%s=$1 %s=$2 %s=$3 $4`, KEY_DB, KEY_TABLE, NEXT_SIBLING_COLUMN_KEY)
+	replWithName = fmt.Sprintf(`%s=$1 %s=$2 %s=$3 $4`, KEY_DB, KEY_TABLE, KEY_INER_NEXT_SIBLING_COLUMN)
 
 	regTableName  = regexp.MustCompile(`(\w+)\.(\w+)(.*)`)
-	replTableName = fmt.Sprintf(`%s=$1 %s=$2 %s="" $3`, KEY_DB, KEY_TABLE, NEXT_SIBLING_COLUMN_KEY)
+	replTableName = fmt.Sprintf(`%s=$1 %s=$2 %s="" $3`, KEY_DB, KEY_TABLE, KEY_INER_NEXT_SIBLING_COLUMN)
 
 	regDBName  = regexp.MustCompile(`(\w+)(.*)`)
-	replDBName = fmt.Sprintf(`%s=$1 %s="" $2`, KEY_DB, NEXT_SIBLING_COLUMN_KEY)
+	replDBName = fmt.Sprintf(`%s=$1 %s="" $2`, KEY_DB, KEY_INER_NEXT_SIBLING_COLUMN)
 )
 
 func FormatRawText(s string) string {
+	s = regArrWithValue.ReplaceAllString(s, replArrWithValue)
+	s = regArrWithName.ReplaceAllString(s, replArrWithName)
 	if regWithValue.MatchString(s) {
 		return regWithValue.ReplaceAllString(s, replWithValue)
 	}
@@ -292,11 +443,31 @@ func rawHtml2Record(rawText string) (record *Record, ok bool) {
 		panic(err)
 	}
 	for _, parseAttr := range attrs {
+		value := ""
+		rv := reflect.Indirect(reflect.ValueOf(parseAttr.Value))
+		switch rv.Kind() {
+		case reflect.String:
+			value = rv.String()
+		case reflect.Bool:
+			value = strconv.FormatBool(rv.Bool())
+		case reflect.Float64:
+			value = strconv.FormatFloat(rv.Float(), 'f', 0, 64)
+		case reflect.Float32:
+			value = strconv.FormatFloat(rv.Float(), 'f', 0, 32)
+		case reflect.Int, reflect.Int64:
+			value = strconv.FormatInt(rv.Int(), 10)
+		default:
+			value = fmt.Sprintf("%s", parseAttr.Value)
+
+		}
 		attr := KV{
 			Key:   string(parseAttr.Name),
-			Value: fmt.Sprintf("%s", parseAttr.Value),
+			Value: value,
 		}
-		record.AdddKV(attr)
+		if strings.HasSuffix(attr.Key, ARRAY_SUFFIX) { // 数组元素替换为原样
+			attr.Key = fmt.Sprintf("%s[]", strings.TrimSuffix(attr.Key, ARRAY_SUFFIX))
+		}
+		record.AddKV(attr)
 	}
 	return record, true
 }

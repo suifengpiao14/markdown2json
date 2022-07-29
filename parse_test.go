@@ -11,6 +11,16 @@ import (
 )
 
 func TestParse(t *testing.T) {
+	records := GetRecords()
+	b, err := json.Marshal(records)
+	if err != nil {
+		panic(err)
+	}
+	str := string(b)
+	fmt.Println(str)
+}
+
+func GetRecords() parsemarkdown.Records {
 	//file := "./example/first-doc.mdx"
 	file := "./example/spuUpdateQuestion.md"
 	fd, err := os.OpenFile(file, os.O_RDONLY, os.ModePerm)
@@ -25,10 +35,17 @@ func TestParse(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	b, err := json.Marshal(records)
+	return records
+}
+
+func TestMerge(t *testing.T) {
+	records := GetRecords()
+	newRecords := records.Format()
+	b, err := json.Marshal(newRecords)
 	if err != nil {
 		panic(err)
 	}
 	str := string(b)
 	fmt.Println(str)
+
 }
