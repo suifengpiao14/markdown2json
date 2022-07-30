@@ -32,6 +32,7 @@ const (
 	KEY_LENGTH                   = "_length" //内联元素指定截取字符串长度
 	ID_SEPARATOR                 = "-"
 	KEY_REF                      = "ref"
+	KEY_INER_REF                 = "_ref_"    // 内部记录来源,方便出错时,提示信息更有正对性
 	KEY_INHERIT                  = "_inherit" // 是否基础其它相同id的属性(公共参数有时需明确指出不继承其它优先级标签的更多属性)
 )
 
@@ -53,7 +54,10 @@ func Parse(source []byte) (records Records, err error) {
 	)
 	reader := text.NewReader(source)
 	document := md.Parser().Parse(reader)
-	records = parseNode(document, source)
+	records, err = parseNode(document, source)
+	if err != nil {
+		return nil, err
+	}
 	return records, nil
 }
 
@@ -86,7 +90,7 @@ func (records Records) GetRefs() (refRecords Records) {
 	return refRecords
 }
 
-func (records Records) Format() (newRecords Records) {
+func (records Records) Format() (newRecords Records, err error) {
 	newRecords = make(Records, 0)
 	group := map[string]Records{} // 按照index 分组
 	for _, record := range records {
@@ -100,7 +104,10 @@ func (records Records) Format() (newRecords Records) {
 	// 相同index 合并
 	tmpNewRecords := Records{}
 	for _, sameIndexRecords := range group {
-		newRecord := MergeRecords(sameIndexRecords...)
+		newRecord, err := MergeRecords(sameIndexRecords...)
+		if err != nil {
+			return nil, err
+		}
 		tmpNewRecords = append(tmpNewRecords, &newRecord)
 	}
 	// 合并父类
@@ -117,10 +124,13 @@ func (records Records) Format() (newRecords Records) {
 			mergeRecord = append(mergeRecord, sameIndexParents...)
 			parentIndex = GetParentIndex(parentIndex)
 		}
-		newRecord := MergeRecords(mergeRecord...)
+		newRecord, err := MergeRecords(mergeRecord...)
+		if err != nil {
+			return nil, err
+		}
 		newRecords = append(newRecords, &newRecord)
 	}
-	return newRecords
+	return newRecords, nil
 }
 
 func (records Records) Filter(kv KV) (subRecords Records) {
@@ -135,7 +145,11 @@ func (records Records) Filter(kv KV) (subRecords Records) {
 }
 
 func (records Records) String() (out string) {
-	newRecords := records.Format().MoveInternalKey()
+	newRecords, err := records.Format()
+	if err != nil {
+		panic(err)
+	}
+	newRecords = newRecords.MoveInternalKey()
 	arr := make([]map[string]string, 0)
 	for _, record := range newRecords {
 		mp := make(map[string]string)
@@ -172,20 +186,32 @@ func (records Records) GetByIndexWithChildren(index string) (newRecords Records)
 	return newRecords
 }
 
+func RecordError(record Record, err error) error {
+	idAttr, ok := record.GetKV(KEY_DB)
+	if ok {
+		err = errors.WithMessagef(err, "id: %s", idAttr.Value)
+	}
+	innerRefAttr, ok := record.GetKV(KEY_INER_REF)
+	if ok {
+		err = errors.WithMessagef(err, "ref: %s", innerRefAttr.Value)
+	}
+	return err
+}
+
 //MergeRecords 将多条记录中的kv，按保留最早出现的原则，合并成一条
-func MergeRecords(records ...*Record) (newRecord Record) {
+func MergeRecords(records ...*Record) (newRecord Record, err error) {
 	kvMap := map[string]*KV{}
 	for _, record := range records {
 		inheritAttr, ok := record.GetKV(KEY_INHERIT)
 		if ok {
 			bol, err := strconv.ParseBool(inheritAttr.Value)
 			if err != nil {
-				err := errors.WithMessagef(err, "string %s to bool err:", inheritAttr.Value)
-				panic(err)
+				err = RecordError(*record, err)
+				return nil, err
 			}
 			if !bol {
 
-				return *record
+				return *record, nil
 			}
 		}
 		for _, kv := range *record {
@@ -206,11 +232,12 @@ func MergeRecords(records ...*Record) (newRecord Record) {
 	for _, kv := range kvMap {
 		newRecord = append(newRecord, kv)
 	}
-	return newRecord
+	return newRecord, nil
 }
 
 func (record *Record) AddKV(kv KV) {
-	*record = append(*record, &kv)
+	*record = append(*record, &kv) // 首先添加
+	//针对db、table、id 属性特殊处理,3个全部设置好后生成 _index_属性
 	if !(kv.Key == KEY_DB || kv.Key == KEY_TABLE || kv.Key == KEY_ID) {
 		return
 	}
@@ -316,19 +343,20 @@ func GetParentIndex(index string) (parentIndex string) {
 func CloneTabHeader(record Record) Record { // 表格元素需要把db、table 等基本属性复制到子元素
 	newRecord := Record{}
 	for _, kv := range record {
-		if kv.Key == KEY_COLUMN || kv.Key == KEY_ID || kv.Key == KEY_REF {
+		switch kv.Key {
+		case KEY_COLUMN, KEY_ID, KEY_REF: // 这些属性不复制
 			continue
+		default:
+			newRecord.AddKV(*kv)
 		}
-		newKv := *kv
-		newRecord = append(newRecord, &newKv)
 	}
 	return newRecord
 }
-func SetNextSiblingValue(nextNode ast.Node, record *Record, records *Records, source []byte) {
+func SetNextSiblingValue(nextNode ast.Node, record *Record, records *Records, source []byte) (err error) {
 	nextsiblingAttr, ok := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
 	if !ok {
-		err := errors.Errorf("record attr %s required", KEY_INER_NEXT_SIBLING_COLUMN)
-		panic(err)
+		err = errors.Errorf("record attr %s required", KEY_INER_NEXT_SIBLING_COLUMN)
+		return err
 	}
 	// 处理代码块元素
 	if fencedCodeNode, ok := nextNode.(*ast.FencedCodeBlock); ok {
@@ -342,32 +370,32 @@ func SetNextSiblingValue(nextNode ast.Node, record *Record, records *Records, so
 			Key:   nextsiblingAttr.Value,
 			Value: value,
 		})
-		return
+		return nil
 	}
 	// 处理表格元素
 	if tableHTML, ok := nextNode.(*extast.Table); ok {
 		idAttr, ok := record.GetKV(KEY_ID)
 		if !ok {
-			err := errors.Errorf("table element required %s attribute", KEY_ID)
-			panic(err)
+			err = errors.Errorf("table element required %s attribute", KEY_ID)
+			return err
 		}
 		columnAttr, ok := record.GetKV(KEY_COLUMN)
 		if !ok {
-			err := errors.Errorf("table element required %s attribute", KEY_COLUMN)
-			panic(err)
+			err = errors.Errorf("table element required %s attribute", KEY_COLUMN)
+			return err
 		}
 		columnArr := strings.Split(columnAttr.Value, ",")
 		firstColumnName := columnArr[0]
 		firstNode := tableHTML.FirstChild()
 		headNode, ok := firstNode.(*extast.TableHeader)
 		if !ok {
-			err := errors.Errorf("first children is not header")
-			panic(err)
+			err = errors.Errorf("first children is not header")
+			return err
 		}
 		columnLen := len(columnArr)
 		if columnLen != headNode.ChildCount() {
-			err := errors.Errorf("column filed not match table head field.column:%s,ref:", strings.Join(columnArr, ","))
-			panic(err)
+			err = errors.Errorf("column filed not match table head field.column:%s,ref:", strings.Join(columnArr, ","))
+			return err
 		}
 
 		var subNode ast.Node
@@ -379,8 +407,8 @@ func SetNextSiblingValue(nextNode ast.Node, record *Record, records *Records, so
 			}
 			tableRow, ok := subNode.(*extast.TableRow)
 			if !ok {
-				err := errors.Errorf("subNode must be tableRow")
-				panic(err)
+				err = errors.Errorf("subNode must be tableRow")
+				return err
 			}
 			cellIndex := 0
 			cellNode := tableRow.FirstChild()
@@ -423,11 +451,11 @@ func SetNextSiblingValue(nextNode ast.Node, record *Record, records *Records, so
 		l, err := strconv.Atoi(lenAttr.Value)
 		if err != nil {
 			err = errors.WithMessagef(err, "convert %s attr err, rawHTML:%s", KEY_LENGTH, value)
-			panic(err)
+			return err
 		}
 		if l > len(value) {
 			err = errors.WithMessagef(err, "value length less then  %d, rawHTML:%s", l, value)
-			panic(err)
+			return err
 		}
 		value = value[:l+1]
 	}
@@ -436,46 +464,57 @@ func SetNextSiblingValue(nextNode ast.Node, record *Record, records *Records, so
 		Value: value,
 	})
 
+	return nil
 }
 
-func parseNode(node ast.Node, source []byte) (records Records) {
+func parseNode(node ast.Node, source []byte) (records Records, err error) {
 	records = Records{}
 	if htmlBlock, ok := node.(*ast.HTMLBlock); ok && htmlBlock.HTMLBlockType == ast.HTMLBlockType2 {
 		htmlRaw := Node2RawText(htmlBlock, source)
-		record, ok := rawHtml2Record(htmlRaw)
-		if ok {
-			records = append(records, record) // 先保存记录,后续可以通过引用修改当前record 部分值
-			_, exists := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
-			if exists {
-				nextNode := node.NextSibling()
-				SetNextSiblingValue(nextNode, record, &records, source)
-			}
+		record, err := rawHtml2Record(htmlRaw)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record) // 先保存记录,后续可以通过引用修改当前record 部分值
+		_, exists := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
+		if exists {
+			nextNode := node.NextSibling()
+			SetNextSiblingValue(nextNode, record, &records, source)
 		}
 
 	} else if rawHTML, ok := node.(*ast.RawHTML); ok { // 内联元素
 		txt := Node2RawText(rawHTML, source)
-		record, ok := rawHtml2Record(txt)
-		if ok {
-			_, exists := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
-			if exists {
-				nextNode := node.NextSibling()
-				SetNextSiblingValue(nextNode, record, &records, source)
-			}
-			records = append(records, record)
+		record, err := rawHtml2Record(txt)
+		if err != nil {
+			return nil, err
 		}
+
+		_, exists := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
+		if exists {
+			nextNode := node.NextSibling()
+			SetNextSiblingValue(nextNode, record, &records, source)
+		}
+		records = append(records, record)
+
 	}
 	if node.HasChildren() {
 		firstChild := node.FirstChild()
-		subRecords := parseNode(firstChild, source)
+		subRecords, err := parseNode(firstChild, source)
+		if err != nil {
+			return nil, err
+		}
 		records = append(records, subRecords...)
 	}
 	nextNode := node.NextSibling()
 	if nextNode != nil {
-		subRecords := parseNode(nextNode, source)
+		subRecords, err := parseNode(nextNode, source)
+		if err != nil {
+			return nil, err
+		}
 		records = append(records, subRecords...)
 	}
 
-	return records
+	return records, nil
 }
 
 const (
@@ -519,7 +558,7 @@ func FormatRawText(s string) string {
 	return s
 }
 
-func rawHtml2Record(rawText string) (record *Record, ok bool) {
+func rawHtml2Record(rawText string) (record *Record, err error) {
 	record = &Record{}
 	rawText = strings.Trim(rawText, "<!-/>")
 	rawText = strings.TrimSpace(rawText)
@@ -530,7 +569,7 @@ func rawHtml2Record(rawText string) (record *Record, ok bool) {
 	attrs, ok := parser.ParseAttributes(txtReader)
 	if !ok {
 		err := errors.Errorf("convert to attribute err:%s,rawTxt:%s", attrStr, rawText)
-		panic(err)
+		return nil, err
 	}
 	for _, parseAttr := range attrs {
 		value := ""
@@ -559,7 +598,7 @@ func rawHtml2Record(rawText string) (record *Record, ok bool) {
 		}
 		record.AddKV(attr)
 	}
-	return record, true
+	return record, nil
 }
 
 func Node2RawText(node ast.Node, source []byte) (out string) {

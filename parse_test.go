@@ -46,7 +46,10 @@ func TestGetRefs(t *testing.T) {
 
 func TestMerge(t *testing.T) {
 	records := GetRecords()
-	newRecords := records.Format()
+	newRecords, err := records.Format()
+	if err != nil {
+		panic(err)
+	}
 	b, err := json.Marshal(newRecords)
 	if err != nil {
 		panic(err)
