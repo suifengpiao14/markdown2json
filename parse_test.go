@@ -41,7 +41,7 @@ func GetRecords() parsemarkdown.Records {
 func TestGetRefs(t *testing.T) {
 	records := GetRecords()
 	refRecords := records.GetRefs()
-	fmt.Printf(refRecords.String())
+	fmt.Println(refRecords.String())
 }
 
 func TestMerge(t *testing.T) {

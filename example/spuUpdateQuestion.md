@@ -5,16 +5,15 @@
 **协议：**
 - 级别：二层
 - 路径：<!--doc.api.uri--> /spu/ajaxSpuUpdateQuestion
-- 请求方法 :<!--doc.api.method--> POST
+- 请求方法 :<!--doc.api.method --> POST
 
 **环境：**
 - 开发： <!--doc.server.proxy id=dev description="开发环境"-->193.112.197.63 http://opms.huishoubao.com.cn
 - 测试：<!--doc.server.proxy id=test description="测试环境"-->xx.xx.xx.xx  http://opms.huishoubao.com.cn
 - 线上：<!--doc.server.url-->http://opms.huishoubao.com.cn
-<!--doc.parameter.ref="http://doc.doc/common/parameters" position=body id=requestParamter -->
+<!--doc.parameter.ref="file:///Users/admin/Documents/go/markdown2json/example/commonArgs.md" position=body id=requestParamter -->
 **请求参数：**
-<!--doc.parameter.enum[]=3 id=requestParamter-->
-<!--doc.parameter id=requestParamter fullname="_param.$name" position=body column="name,type,required,default,description" keymap="格式:format,枚举值:enum" enum[]=2-->
+<!--doc.parameter id=requestParamter prefix="_param" position=body column="name,type,required,default,description"-->
 |参数名|类型|必选|默认值|说明|
 |:----    |:---|:----- |-----   |-----   |
 |scene| string|是|-|场景<br/>枚举值:3C(3C),3C_NEW(3C_NEW)|
@@ -25,7 +24,7 @@
 <Attr name="hello world"/>
 <!--doc.server.variables=signature:joenebfhefeh -->
 
-<!--doc.server.preRequest-->
+<!--doc.service.preRequest-->
 ```javascript
 var serviceId=options.variables.filter(function(row){return row.name=="serviceId"})[0]?.value;
 options.headers['HSB-OPENAPI-CALLERSERVICEID']=String(serviceId);

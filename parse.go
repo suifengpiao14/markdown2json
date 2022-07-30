@@ -32,6 +32,7 @@ const (
 	KEY_LENGTH                   = "_length" //内联元素指定截取字符串长度
 	ID_SEPARATOR                 = "-"
 	KEY_REF                      = "ref"
+	KEY_INHERIT                  = "_inherit" // 是否基础其它相同id的属性(公共参数有时需明确指出不继承其它优先级标签的更多属性)
 )
 
 func Parse(source []byte) (records Records, err error) {
@@ -161,10 +162,32 @@ func (records Records) GetByIndex(index string) (newRecords Records) {
 	return newRecords
 }
 
+func (records Records) GetByIndexWithChildren(index string) (newRecords Records) {
+	newRecords = make(Records, 0)
+	for _, record := range records {
+		if strings.HasPrefix(record.GetIndex(), index) {
+			newRecords = append(newRecords, record)
+		}
+	}
+	return newRecords
+}
+
 //MergeRecords 将多条记录中的kv，按保留最早出现的原则，合并成一条
 func MergeRecords(records ...*Record) (newRecord Record) {
 	kvMap := map[string]*KV{}
 	for _, record := range records {
+		inheritAttr, ok := record.GetKV(KEY_INHERIT)
+		if ok {
+			bol, err := strconv.ParseBool(inheritAttr.Value)
+			if err != nil {
+				err := errors.WithMessagef(err, "string %s to bool err:", inheritAttr.Value)
+				panic(err)
+			}
+			if !bol {
+
+				return *record
+			}
+		}
 		for _, kv := range *record {
 			okv, ok := kvMap[kv.Key]
 			if !ok { // 不存在，直接填充后跳过
@@ -219,7 +242,8 @@ func (record *Record) MoveInternalKey() (new Record) {
 	newRecord := Record{}
 	for _, kv := range *record {
 		switch kv.Key {
-		case KEY_INER_NEXT_SIBLING_COLUMN, KEY_INER_INDEX: // 删除内部使用的KV
+		case KEY_INER_NEXT_SIBLING_COLUMN, KEY_INER_INDEX, KEY_LENGTH, KEY_OFFSET: // 删除内部使用的KV
+		case KEY_COLUMN, KEY_REF, KEY_INHERIT: // 删除内部使用的KV
 		default:
 			newRecord = append(newRecord, kv)
 		}
@@ -257,6 +281,17 @@ func (record *Record) GetKV(key string) (kv *KV, ok bool) {
 	}
 	return nil, false
 }
+func (record *Record) PopKV(key string) (popKV *KV, ok bool) {
+	newRecord := Record{}
+	for _, kv := range *record {
+		if kv.Key == key {
+			popKV = kv
+		} else {
+			newRecord = append(newRecord, newRecord...)
+		}
+	}
+	return popKV, false
+}
 
 func (record *Record) ResetKV(kv KV) {
 	exists := false
@@ -271,18 +306,6 @@ func (record *Record) ResetKV(kv KV) {
 	}
 }
 
-func CloneTabHeader(record Record) Record {
-	newRecord := Record{}
-	for _, kv := range record {
-		if kv.Key == KEY_COLUMN || kv.Key == KEY_ID {
-			continue
-		}
-		newKv := *kv
-		newRecord = append(newRecord, &newKv)
-	}
-	return newRecord
-}
-
 //GetIndex  获取记录的 父类key
 func GetParentIndex(index string) (parentIndex string) {
 	p := strings.LastIndex(index, ID_SEPARATOR)
@@ -291,6 +314,131 @@ func GetParentIndex(index string) (parentIndex string) {
 	}
 	return ""
 }
+func CloneTabHeader(record Record) Record { // 表格元素需要把db、table 等基本属性复制到子元素
+	newRecord := Record{}
+	for _, kv := range record {
+		if kv.Key == KEY_COLUMN || kv.Key == KEY_ID || kv.Key == KEY_REF {
+			continue
+		}
+		newKv := *kv
+		newRecord = append(newRecord, &newKv)
+	}
+	return newRecord
+}
+func SetNextSiblingValue(nextNode ast.Node, record *Record, records *Records, source []byte) {
+	nextsiblingAttr, ok := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
+	if !ok {
+		err := errors.Errorf("record attr %s required", KEY_INER_NEXT_SIBLING_COLUMN)
+		panic(err)
+	}
+	// 处理代码块元素
+	if fencedCodeNode, ok := nextNode.(*ast.FencedCodeBlock); ok {
+		attr := &KV{
+			Key:   "language",
+			Value: string(fencedCodeNode.Language(source)),
+		}
+		record.AddKV(*attr)
+		value := Node2RawText(nextNode, source)
+		record.AddKV(KV{
+			Key:   nextsiblingAttr.Value,
+			Value: value,
+		})
+		return
+	}
+	// 处理表格元素
+	if tableHTML, ok := nextNode.(*extast.Table); ok {
+		idAttr, ok := record.GetKV(KEY_ID)
+		if !ok {
+			err := errors.Errorf("table element required %s attribute", KEY_ID)
+			panic(err)
+		}
+		columnAttr, ok := record.GetKV(KEY_COLUMN)
+		if !ok {
+			err := errors.Errorf("table element required %s attribute", KEY_COLUMN)
+			panic(err)
+		}
+		columnArr := strings.Split(columnAttr.Value, ",")
+		firstColumnName := columnArr[0]
+		firstNode := tableHTML.FirstChild()
+		headNode, ok := firstNode.(*extast.TableHeader)
+		if !ok {
+			err := errors.Errorf("first children is not header")
+			panic(err)
+		}
+		columnLen := len(columnArr)
+		if columnLen != headNode.ChildCount() {
+			err := errors.Errorf("column filed not match table head field.column:%s,ref:", strings.Join(columnArr, ","))
+			panic(err)
+		}
+
+		var subNode ast.Node
+		subNode = headNode.NextSibling()
+		i := 0
+		for {
+			if subNode == nil {
+				break
+			}
+			tableRow, ok := subNode.(*extast.TableRow)
+			if !ok {
+				err := errors.Errorf("subNode must be tableRow")
+				panic(err)
+			}
+			cellIndex := 0
+			cellNode := tableRow.FirstChild()
+			newRecord := CloneTabHeader(*record)
+			var kv = KV{}
+			for {
+				if cellNode == nil {
+					break
+				}
+				name := columnArr[cellIndex]
+				value := cellNode.Text(source)
+				kv = KV{
+					Key:   name,
+					Value: string(value),
+				}
+				newRecord.AddKV(kv)
+				cellNode = cellNode.NextSibling()
+				cellIndex++
+			}
+			idValue := fmt.Sprintf("%s%s%d", idAttr.Value, ID_SEPARATOR, i)
+			firstAttr, ok := newRecord.GetKV(firstColumnName)
+			if ok {
+				idValue = fmt.Sprintf("%s%s%s", idAttr.Value, ID_SEPARATOR, firstAttr.Value)
+			}
+			idKV := KV{
+				Key:   KEY_ID,
+				Value: idValue,
+			}
+			newRecord.AddKV(idKV)
+			*records = append(*records, &newRecord)
+			subNode = subNode.NextSibling()
+			i++
+		}
+		return
+	}
+	// 其它元素
+	value := Node2RawText(nextNode, source)
+	lenAttr, ok := record.GetKV(KEY_LENGTH)
+	if ok {
+		l, err := strconv.Atoi(lenAttr.Value)
+		if err != nil {
+			err = errors.WithMessagef(err, "convert %s attr err, rawHTML:%s", KEY_LENGTH, value)
+			panic(err)
+		}
+		if l > len(value) {
+			err = errors.WithMessagef(err, "value length less then  %d, rawHTML:%s", l, value)
+			panic(err)
+		}
+		value = value[:l+1]
+	}
+	record.AddKV(KV{
+		Key:   nextsiblingAttr.Value,
+		Value: value,
+	})
+	return
+
+}
 
 func parseNode(node ast.Node, source []byte) (records Records) {
 	records = Records{}
@@ -298,121 +446,22 @@ func parseNode(node ast.Node, source []byte) (records Records) {
 		htmlRaw := Node2RawText(htmlBlock, source)
 		record, ok := rawHtml2Record(htmlRaw)
 		if ok {
-			nextsiblingAttr, exists := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
+			records = append(records, record) // 先保存记录,后续可以通过引用修改当前record 部分值
+			_, exists := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
 			if exists {
 				nextNode := node.NextSibling()
-				if fencedCodeNode, ok := nextNode.(*ast.FencedCodeBlock); ok {
-					attr := &KV{
-						Key:   "language",
-						Value: string(fencedCodeNode.Language(source)),
-					}
-					record.AddKV(*attr)
-					value := Node2RawText(nextNode, source)
-					record.AddKV(KV{
-						Key:   nextsiblingAttr.Value,
-						Value: value,
-					})
-				} else if tableHTML, ok := nextNode.(*extast.Table); ok {
-					idAttr, ok := record.GetKV(KEY_ID)
-					if !ok {
-						err := errors.Errorf("table element required %s attribute", KEY_ID)
-						panic(err)
-					}
-					columnAttr, ok := record.GetKV(KEY_COLUMN)
-					if !ok {
-						err := errors.Errorf("table element required %s attribute", KEY_COLUMN)
-						panic(err)
-					}
-					columnArr := strings.Split(columnAttr.Value, ",")
-					firstColumnName := columnArr[0]
-					firstNode := tableHTML.FirstChild()
-					headNode, ok := firstNode.(*extast.TableHeader)
-					if !ok {
-						err := errors.Errorf("first children is not header")
-						panic(err)
-					}
-					columnLen := len(columnArr)
-					if columnLen != headNode.ChildCount() {
-						err := errors.Errorf("coulmn filed not match table head field")
-						panic(err)
-					}
-
-					var subNode ast.Node
-					subNode = headNode.NextSibling()
-					i := 0
-					for {
-						if subNode == nil {
-							break
-						}
-						tableRow, ok := subNode.(*extast.TableRow)
-						if !ok {
-							err := errors.Errorf("subNode must be tableRow")
-							panic(err)
-						}
-						cellIndex := 0
-						cellNode := tableRow.FirstChild()
-						newRecord := CloneTabHeader(*record)
-						var kv = KV{}
-						for {
-							if cellNode == nil {
-								break
-							}
-							name := columnArr[cellIndex]
-							value := cellNode.Text(source)
-							kv = KV{
-								Key:   name,
-								Value: string(value),
-							}
-							newRecord.AddKV(kv)
-							cellNode = cellNode.NextSibling()
-							cellIndex++
-						}
-						idValue := fmt.Sprintf("%s%s%d", idAttr.Value, ID_SEPARATOR, i)
-						firstAttr, ok := newRecord.GetKV(firstColumnName)
-						if ok {
-							idValue = fmt.Sprintf("%s%s%s", idAttr.Value, ID_SEPARATOR, firstAttr.Value)
-						}
-						idKV := KV{
-							Key:   KEY_ID,
-							Value: idValue,
-						}
-						newRecord.AddKV(idKV)
-						records = append(records, &newRecord)
-						subNode = subNode.NextSibling()
-						i++
-					}
-				}
-			} else {
-				records = append(records, record)
+				SetNextSiblingValue(nextNode, record, &records, source)
 			}
-
 		}
 
 	} else if rawHTML, ok := node.(*ast.RawHTML); ok { // 内联元素
 		txt := Node2RawText(rawHTML, source)
 		record, ok := rawHtml2Record(txt)
 		if ok {
-			nextsiblingAttr, exists := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
+			_, exists := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
 			if exists {
 				nextNode := node.NextSibling()
-				value := Node2RawText(nextNode, source)
-				lenAttr, ok := record.GetKV(KEY_LENGTH)
-				if ok {
-					l, err := strconv.Atoi(lenAttr.Value)
-					if err != nil {
-						err = errors.WithMessagef(err, "convert %s attr err, rawHTML:%s", KEY_LENGTH, txt)
-						panic(err)
-					}
-					if l > len(value) {
-						err = errors.WithMessagef(err, "value length less then  %d, rawHTML:%s", l, txt)
-						panic(err)
-					}
-					value = value[:l+1]
-				}
-				record.AddKV(KV{
-					Key:   nextsiblingAttr.Value,
-					Value: value,
-				})
+				SetNextSiblingValue(nextNode, record, &records, source)
 			}
 			records = append(records, record)
 		}
