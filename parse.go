@@ -187,7 +187,7 @@ func (records Records) GetByIndexWithChildren(index string) (newRecords Records)
 }
 
 func RecordError(record Record, err error) error {
-	idAttr, ok := record.GetKV(KEY_DB)
+	idAttr, ok := record.GetKV(KEY_ID)
 	if ok {
 		err = errors.WithMessagef(err, "id: %s", idAttr.Value)
 	}
@@ -268,7 +268,7 @@ func (record *Record) MoveInternalKey() (new Record) {
 	newRecord := Record{}
 	for _, kv := range *record {
 		switch kv.Key {
-		case KEY_INER_NEXT_SIBLING_COLUMN, KEY_INER_INDEX, KEY_LENGTH, KEY_OFFSET: // 删除内部使用的KV
+		case KEY_INER_NEXT_SIBLING_COLUMN, KEY_INER_INDEX, KEY_LENGTH, KEY_OFFSET, KEY_INER_REF: // 删除内部使用的KV
 		case KEY_COLUMN, KEY_REF, KEY_INHERIT: // 删除内部使用的KV
 		default:
 			newRecord = append(newRecord, kv)
