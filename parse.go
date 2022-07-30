@@ -233,7 +233,6 @@ func (record *Record) AddKV(kv KV) {
 		Key:   KEY_INER_INDEX,
 		Value: index,
 	})
-	return
 
 }
 
@@ -436,7 +435,6 @@ func SetNextSiblingValue(nextNode ast.Node, record *Record, records *Records, so
 		Key:   nextsiblingAttr.Value,
 		Value: value,
 	})
-	return
 
 }
 
