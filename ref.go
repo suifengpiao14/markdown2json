@@ -34,7 +34,7 @@ func ResolveRef(records Records) (newRecords Records, err error) {
 		refRecord.PopKV(refAttr.Key) // 删除 ref key
 		path := refAttr.Value
 		var source []byte
-		u, err := url.ParseRequestURI(path)
+		u, err := url.Parse(path)
 		if err != nil {
 			return nil, err
 		}
@@ -67,22 +67,23 @@ func ResolveRef(records Records) (newRecords Records, err error) {
 			err = errors.WithMessagef(err, "ref:%s", refAttr.Value)
 			return nil, err
 		}
-		indexAttr, ok := refRecord.GetKV(KEY_INER_INDEX)
-		if ok {
-			subRecords = subRecords.GetByIndexWithChildren(indexAttr.Value) //筛选 和ref record id 相同的元素及其子元素
-			for _, subRecord := range subRecords {
-				inerRefAttr, ok := subRecord.GetKV(KEY_INER_REF)
-				if !ok {
-					inerRefAttr = &KV{
-						Key:   KEY_INER_REF,
-						Value: refAttr.Value,
-					}
-				} else {
-					inerRefAttr.Value = fmt.Sprintf("%s,%s", inerRefAttr.Value, refAttr.Value)
-				}
-				subRecord.AddKV(*inerRefAttr)
-			}
+		if u.Fragment != "" {
+			subRecords = subRecords.GetByIndexWithChildren(u.Fragment) //筛选 和ref record id 相同的元素及其子元素
 		}
+
+		for _, subRecord := range subRecords {
+			inerRefAttr, ok := subRecord.GetKV(KEY_INER_REF)
+			if !ok {
+				inerRefAttr = &KV{
+					Key:   KEY_INER_REF,
+					Value: refAttr.Value,
+				}
+			} else {
+				inerRefAttr.Value = fmt.Sprintf("%s,%s", inerRefAttr.Value, refAttr.Value)
+			}
+			subRecord.AddKV(*inerRefAttr)
+		}
+
 		newRecords = append(newRecords, subRecords...)
 		subRefRecords := subRecords.GetRefs()
 		refRecords = append(refRecords, subRefRecords...)

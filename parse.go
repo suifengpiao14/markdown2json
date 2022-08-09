@@ -22,16 +22,17 @@ import (
 )
 
 const (
+	KEY_PRIVATE_PREFIX           = "_"
 	KEY_INER_NEXT_SIBLING_COLUMN = "_nextsiblingName_"
 	KEY_INER_INDEX               = "_index_"
 	KEY_ID                       = "id"
-	KEY_COLUMN                   = "column"
+	KEY_COLUMN                   = "_column"
 	KEY_DB                       = "db"
 	KEY_TABLE                    = "table"
 	KEY_OFFSET                   = "_offset" //内联元素指定截取字符串位置
 	KEY_LENGTH                   = "_length" //内联元素指定截取字符串长度
 	ID_SEPARATOR                 = "-"
-	KEY_REF                      = "ref"
+	KEY_REF                      = "_ref"
 	KEY_INER_REF                 = "_ref_"    // 内部记录来源,方便出错时,提示信息更有正对性
 	KEY_INHERIT                  = "_inherit" // 是否基础其它相同id的属性(公共参数有时需明确指出不继承其它优先级标签的更多属性)
 )
@@ -68,13 +69,13 @@ type KV struct {
 
 type Record []*KV
 
-type Records []*Record
+type Records []Record
 
 func (records Records) MoveInternalKey() (newRecords Records) {
 	newRecords = make(Records, 0)
 	for _, record := range records {
 		newRecord := record.MoveInternalKey()
-		newRecords = append(newRecords, &newRecord)
+		newRecords = append(newRecords, newRecord)
 	}
 	return newRecords
 }
@@ -92,12 +93,12 @@ func (records Records) GetRefs() (refRecords Records) {
 
 func (records Records) Format() (newRecords Records, err error) {
 	newRecords = make(Records, 0)
-	group := map[string]Records{} // 按照index 分组
+	group := map[string][]Record{} // 按照index 分组
 	for _, record := range records {
 		index := record.GetIndex()
 		_, ok := group[index]
 		if !ok {
-			group[index] = make(Records, 0)
+			group[index] = make([]Record, 0)
 		}
 		group[index] = append(group[index], record)
 	}
@@ -108,11 +109,11 @@ func (records Records) Format() (newRecords Records, err error) {
 		if err != nil {
 			return nil, err
 		}
-		tmpNewRecords = append(tmpNewRecords, &newRecord)
+		tmpNewRecords = append(tmpNewRecords, newRecord)
 	}
 	// 合并父类
 	for _, record := range tmpNewRecords {
-		mergeRecord := Records{}
+		mergeRecord := make([]Record, 0)
 		mergeRecord = append(mergeRecord, record)
 		index := record.GetIndex()
 		parentIndex := GetParentIndex(index)
@@ -128,7 +129,7 @@ func (records Records) Format() (newRecords Records, err error) {
 		if err != nil {
 			return nil, err
 		}
-		newRecords = append(newRecords, &newRecord)
+		newRecords = append(newRecords, newRecord)
 	}
 	return newRecords, nil
 }
@@ -153,7 +154,7 @@ func (records Records) String() (out string) {
 	arr := make([]map[string]string, 0)
 	for _, record := range newRecords {
 		mp := make(map[string]string)
-		for _, kv := range *record {
+		for _, kv := range record {
 			mp[kv.Key] = kv.Value
 		}
 		arr = append(arr, mp)
@@ -199,22 +200,25 @@ func RecordError(record Record, err error) error {
 }
 
 //MergeRecords 将多条记录中的kv，按保留最早出现的原则，合并成一条
-func MergeRecords(records ...*Record) (newRecord Record, err error) {
+func MergeRecords(records ...Record) (newRecord Record, err error) {
 	kvMap := map[string]*KV{}
+	breakInherit := false
 	for _, record := range records {
 		inheritAttr, ok := record.GetKV(KEY_INHERIT)
 		if ok {
 			bol, err := strconv.ParseBool(inheritAttr.Value)
 			if err != nil {
-				err = RecordError(*record, err)
+				err = RecordError(record, err)
 				return nil, err
 			}
 			if !bol {
-
-				return *record, nil
+				breakInherit = true //标记后续父元素不再继承（当前元素的属性需要复制）
 			}
 		}
-		for _, kv := range *record {
+		for _, kv := range record {
+			if strings.HasPrefix(kv.Key, KEY_PRIVATE_PREFIX) { // 过滤私有属性，私有属性不继承
+				continue
+			}
 			okv, ok := kvMap[kv.Key]
 			if !ok { // 不存在，直接填充后跳过
 				kvMap[kv.Key] = kv
@@ -226,6 +230,9 @@ func MergeRecords(records ...*Record) (newRecord Record, err error) {
 			}
 			okv.Value = fmt.Sprintf("%s,%s", okv.Value, kv.Value)
 			kvMap[kv.Key] = okv
+		}
+		if breakInherit {
+			break // 后续属性，不再继承
 		}
 	}
 	newRecord = Record{}
@@ -344,7 +351,7 @@ func CloneTabHeader(record Record) Record { // 表格元素需要把db、table �
 	newRecord := Record{}
 	for _, kv := range record {
 		switch kv.Key {
-		case KEY_COLUMN, KEY_ID, KEY_REF: // 这些属性不复制
+		case KEY_COLUMN, KEY_ID, KEY_REF, KEY_INER_NEXT_SIBLING_COLUMN: // 这些属性不复制
 			continue
 		default:
 			newRecord.AddKV(*kv)
@@ -394,7 +401,7 @@ func SetNextSiblingValue(nextNode ast.Node, record *Record, records *Records, so
 		}
 		columnLen := len(columnArr)
 		if columnLen != headNode.ChildCount() {
-			err = errors.Errorf("column filed not match table head field.column:%s,ref:", strings.Join(columnArr, ","))
+			err = errors.Errorf("column filed not match table head field._column:%s,ref:", strings.Join(columnArr, ","))
 			return err
 		}
 
@@ -438,7 +445,7 @@ func SetNextSiblingValue(nextNode ast.Node, record *Record, records *Records, so
 				Value: idValue,
 			}
 			newRecord.AddKV(idKV)
-			*records = append(*records, &newRecord)
+			*records = append(*records, newRecord)
 			subNode = subNode.NextSibling()
 			i++
 		}
@@ -475,12 +482,12 @@ func parseNode(node ast.Node, source []byte) (records Records, err error) {
 		if err != nil {
 			return nil, err
 		}
-		records = append(records, record) // 先保存记录,后续可以通过引用修改当前record 部分值
 		_, exists := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
 		if exists {
 			nextNode := node.NextSibling()
-			SetNextSiblingValue(nextNode, record, &records, source)
+			SetNextSiblingValue(nextNode, &record, &records, source)
 		}
+		records = append(records, record)
 
 	} else if rawHTML, ok := node.(*ast.RawHTML); ok { // 内联元素
 		txt := Node2RawText(rawHTML, source)
@@ -492,7 +499,7 @@ func parseNode(node ast.Node, source []byte) (records Records, err error) {
 		_, exists := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
 		if exists {
 			nextNode := node.NextSibling()
-			SetNextSiblingValue(nextNode, record, &records, source)
+			SetNextSiblingValue(nextNode, &record, &records, source)
 		}
 		records = append(records, record)
 
@@ -558,8 +565,8 @@ func FormatRawText(s string) string {
 	return s
 }
 
-func rawHtml2Record(rawText string) (record *Record, err error) {
-	record = &Record{}
+func rawHtml2Record(rawText string) (record Record, err error) {
+	record = Record{}
 	rawText = strings.Trim(rawText, "<!-/>")
 	rawText = strings.TrimSpace(rawText)
 	formatText := FormatRawText(rawText)
