@@ -21,7 +21,7 @@ func TestResolveRef(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	docRecords := newRecords.Filter(parsemarkdown.KV{Key: parsemarkdown.KEY_DB, Value: "doc"})
+	docRecords := newRecords.FilterByKV(parsemarkdown.KV{Key: parsemarkdown.KEY_DB, Value: "doc"})
 	b, err := json.Marshal(docRecords)
 	if err != nil {
 		panic(err)

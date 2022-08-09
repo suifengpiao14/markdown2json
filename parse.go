@@ -59,6 +59,10 @@ func Parse(source []byte) (records Records, err error) {
 	if err != nil {
 		return nil, err
 	}
+	records, err = ResolveRef(records)
+	if err != nil {
+		return nil, err
+	}
 	return records, nil
 }
 
@@ -134,13 +138,32 @@ func (records Records) Format() (newRecords Records, err error) {
 	return newRecords, nil
 }
 
-func (records Records) Filter(kv KV) (subRecords Records) {
+func (records Records) FilterByKV(kv KV) (subRecords Records) {
 	subRecords = make(Records, 0)
 	for _, record := range records {
-		eKv, ok := record.GetKV(kv.Key)
-		if ok && eKv.Value == kv.Value {
+		ekv, ok := record.GetKV(kv.Key)
+		if ok && ekv.Value == kv.Value {
 			subRecords = append(subRecords, record)
 		}
+	}
+	return subRecords
+}
+
+func (records Records) Filter(fn func(record Record) bool) (subRecords Records) {
+	subRecords = make(Records, 0)
+	for _, record := range records {
+		if fn(record) {
+			subRecords = append(subRecords, record)
+		}
+	}
+	return subRecords
+}
+
+func (records Records) Walk(fn func(record Record) Record) (subRecords Records) {
+	subRecords = make(Records, 0)
+	for _, record := range records {
+		newRecord := fn(record)
+		subRecords = append(subRecords, newRecord)
 	}
 	return subRecords
 }
@@ -267,7 +290,6 @@ func (record *Record) AddKV(kv KV) {
 		Key:   KEY_INER_INDEX,
 		Value: index,
 	})
-
 }
 
 //MoveInternalKey 删除内部使用的KV
@@ -284,7 +306,7 @@ func (record *Record) MoveInternalKey() (new Record) {
 	return newRecord
 }
 
-//GetIndex  获取记录的key
+//GetIndex  获取记录的_index_
 func (record *Record) GetIndex() (index string) {
 	if indexAttr, ok := record.GetKV(KEY_INER_INDEX); ok {
 		return indexAttr.Value
@@ -292,16 +314,19 @@ func (record *Record) GetIndex() (index string) {
 	return ""
 }
 
-// 克隆基本信息
+//GetID 获取记录的ID
+func (record *Record) GetID() (index string) {
+	if idAttr, ok := record.GetKV(KEY_ID); ok {
+		return idAttr.Value
+	}
+	return ""
+}
+
+// 克隆记录
 func (record *Record) Clone() (newRecord Record) {
 	newRecord = Record{}
-	dbAttr, ok := record.GetKV(KEY_DB)
-	if ok {
-		newRecord = append(newRecord, dbAttr)
-	}
-	tableAttr, ok := record.GetKV(KEY_TABLE)
-	if ok {
-		newRecord = append(newRecord, tableAttr)
+	for _, kv := range *record {
+		newRecord.AddKV(*kv)
 	}
 	return newRecord
 }

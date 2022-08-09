@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/pkg/errors"
@@ -67,10 +68,24 @@ func ResolveRef(records Records) (newRecords Records, err error) {
 			err = errors.WithMessagef(err, "ref:%s", refAttr.Value)
 			return nil, err
 		}
-		if u.Fragment != "" {
-			subRecords = subRecords.GetByIndexWithChildren(u.Fragment) //筛选 和ref record id 相同的元素及其子元素
+		newId := ""
+		idKV, ok := refRecord.GetKV(KEY_ID)
+		if ok {
+			newId = idKV.Value
 		}
+		if u.Fragment != "" {
+			newRecord := refRecord.Clone()
+			newRecord.AddKV(KV{
+				Key:   KEY_ID,
+				Value: u.Fragment,
+			})
+			index := newRecord.GetIndex()
+			if index != "" {
+				subRecords = subRecords.GetByIndexWithChildren(index) //筛选 和ref record id 相同的元素及其子元素
+			}
 
+		}
+		replaceID := newId != "" && u.Fragment != "" && newId != u.Fragment
 		for _, subRecord := range subRecords {
 			inerRefAttr, ok := subRecord.GetKV(KEY_INER_REF)
 			if !ok {
@@ -80,6 +95,10 @@ func ResolveRef(records Records) (newRecords Records, err error) {
 				}
 			} else {
 				inerRefAttr.Value = fmt.Sprintf("%s,%s", inerRefAttr.Value, refAttr.Value)
+			}
+			if replaceID {
+				subNewId := strings.ReplaceAll(subRecord.GetID(), u.Fragment, newId)
+				subRecord.AddKV(KV{Key: KEY_ID, Value: subNewId})
 			}
 			subRecord.AddKV(*inerRefAttr)
 		}
