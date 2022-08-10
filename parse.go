@@ -260,7 +260,7 @@ func MergeRecords(records ...Record) (newRecord Record, err error) {
 	}
 	newRecord = Record{}
 	for _, kv := range kvMap {
-		newRecord = append(newRecord, kv)
+		newRecord.AddKV(*kv)
 	}
 	return newRecord, nil
 }
@@ -348,10 +348,14 @@ func (record *Record) PopKV(key string) (popKV *KV, ok bool) {
 		if kv.Key == key {
 			popKV = kv
 		} else {
-			newRecord = append(newRecord, newRecord...)
+			newRecord = append(newRecord, kv)
 		}
 	}
-	return popKV, false
+	*record = newRecord // 替换原有的
+	if popKV == nil {
+		return nil, false
+	}
+	return popKV, true
 }
 
 func (record *Record) ResetKV(kv KV) {
@@ -504,18 +508,34 @@ func SetNextSiblingValue(nextNode ast.Node, record *Record, records *Records, so
 
 func parseNode(node ast.Node, source []byte) (records Records, err error) {
 	records = Records{}
-	if htmlBlock, ok := node.(*ast.HTMLBlock); ok && htmlBlock.HTMLBlockType == ast.HTMLBlockType2 {
-		htmlRaw := Node2RawText(htmlBlock, source)
-		record, err := rawHtml2Record(htmlRaw)
-		if err != nil {
-			return nil, err
+	if htmlBlock, ok := node.(*ast.HTMLBlock); ok {
+		switch htmlBlock.HTMLBlockType {
+		case ast.HTMLBlockType2:
+			htmlRaw := Node2RawText(htmlBlock, source)
+			record, err := rawHtml2Record(htmlRaw)
+			if err != nil {
+				return nil, err
+			}
+			_, exists := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
+			if exists {
+				nextNode := node.NextSibling()
+				SetNextSiblingValue(nextNode, &record, &records, source)
+			}
+			records = append(records, record)
+		case ast.HTMLBlockType7: // 自关闭自定义标签，后面需要加空行，如果存在这种情况，抛出错误，提示增加空行
+			segments := htmlBlock.Lines()
+			for i := 0; i < segments.Len(); i++ {
+				segment := segments.At(i)
+				lineByte := segment.Value(source)
+				lineByte = bytes.TrimSpace(lineByte)
+				if bytes.HasPrefix(lineByte, []byte("<!--")) {
+					err := errors.Errorf("rawHtml:(%s) is  ast.HTMLBlockType7 type ,and must end with blank line .see https://spec.commonmark.org/0.30/#html-blocks point 7", Node2RawText(htmlBlock, source))
+					return nil, err
+				}
+
+			}
+
 		}
-		_, exists := record.GetKV(KEY_INER_NEXT_SIBLING_COLUMN)
-		if exists {
-			nextNode := node.NextSibling()
-			SetNextSiblingValue(nextNode, &record, &records, source)
-		}
-		records = append(records, record)
 
 	} else if rawHTML, ok := node.(*ast.RawHTML); ok { // 内联元素
 		txt := Node2RawText(rawHTML, source)
@@ -595,8 +615,15 @@ func FormatRawText(s string) string {
 
 func rawHtml2Record(rawText string) (record Record, err error) {
 	record = Record{}
-	rawText = strings.Trim(rawText, "<!-/>")
 	rawText = strings.TrimSpace(rawText)
+	//解决以注释开头的行,后续带有值的情况 "<!--doc.service.description-->记录公司spuID和阿里spuID关联关系，以及状态同步"
+	endPos := strings.Index(rawText, ">")
+	siblingValue := ""
+	if endPos != len(rawText)-1 {
+		siblingValue = rawText[endPos+1:]
+		rawText = rawText[:endPos+1]
+	}
+	rawText = strings.Trim(rawText, "<!-/>")
 	formatText := FormatRawText(rawText)
 
 	attrStr := fmt.Sprintf("{%s}", formatText)
@@ -632,6 +659,16 @@ func rawHtml2Record(rawText string) (record Record, err error) {
 			attr.Key = fmt.Sprintf("%s[]", strings.TrimSuffix(attr.Key, ARRAY_SUFFIX))
 		}
 		record.AddKV(attr)
+	}
+	// 处理KEY_INER_NEXT_SIBLING_COLUMN 属性
+	if siblingValue != "" {
+		nextAttr, ok := record.PopKV(KEY_INER_NEXT_SIBLING_COLUMN)
+		if ok {
+			record.AddKV(KV{
+				Key:   nextAttr.Value,
+				Value: siblingValue,
+			})
+		}
 	}
 	return record, nil
 }

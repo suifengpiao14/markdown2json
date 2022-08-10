@@ -41,6 +41,7 @@ func GetRecords() parsemarkdown.Records {
 func TestGetRefs(t *testing.T) {
 	records := GetRecords()
 	refRecords := records.GetRefs()
+	parsemarkdown.ResolveRef(refRecords)
 	fmt.Println(refRecords.String())
 }
 
