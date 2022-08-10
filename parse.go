@@ -116,6 +116,7 @@ func (records Records) Format() (newRecords Records, err error) {
 		tmpNewRecords = append(tmpNewRecords, newRecord)
 	}
 	// 合并父类
+	tmpRecords := make(Records, 0)
 	for _, record := range tmpNewRecords {
 		mergeRecord := make([]Record, 0)
 		mergeRecord = append(mergeRecord, record)
@@ -133,8 +134,18 @@ func (records Records) Format() (newRecords Records, err error) {
 		if err != nil {
 			return nil, err
 		}
-		newRecords = append(newRecords, newRecord)
+		tmpRecords = append(tmpRecords, newRecord)
 	}
+	//删除含有子记录的父记录(有子记录，父记录的属性全部赋值给每个子类了，父类无意义)
+	for _, record := range tmpRecords {
+		index := record.GetIndex()
+		subRecords := tmpNewRecords.GetByIndexWithChildren(index)
+		if len(subRecords) > 1 { // 大于1，说明除了本身，还有子元素，忽略
+			continue
+		}
+		newRecords = append(newRecords, record)
+	}
+
 	return newRecords, nil
 }
 
