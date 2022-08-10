@@ -306,6 +306,20 @@ func (record *Record) AddKV(kv KV) {
 	})
 }
 
+func (record Record) String() (out string) {
+	newRecord := record.MoveInternalKey()
+	mp := make(map[string]string)
+	for _, kv := range newRecord {
+		mp[kv.Key] = kv.Value
+	}
+	b, err := json.Marshal(mp)
+	if err != nil {
+		panic(err)
+	}
+	out = string(b)
+	return out
+}
+
 //MoveInternalKey 删除内部使用的KV
 func (record *Record) MoveInternalKey() (new Record) {
 	newRecord := Record{}
