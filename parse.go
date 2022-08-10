@@ -266,6 +266,9 @@ func MergeRecords(records ...Record) (newRecord Record, err error) {
 }
 
 func (record *Record) AddKV(kv KV) {
+	if kv.Key == KEY_INER_INDEX {
+		return // 索引字段，不容许外部添加,如复制时，过滤索引字段（当第一个不是索引，自动生成一个，第二个是索引，直接先新增，和自动生成的形成2个索引）
+	}
 	*record = append(*record, &kv) // 首先添加
 	//针对db、table、id 属性特殊处理,3个全部设置好后生成 _index_属性
 	if !(kv.Key == KEY_DB || kv.Key == KEY_TABLE || kv.Key == KEY_ID) {
