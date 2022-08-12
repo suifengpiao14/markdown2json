@@ -179,6 +179,13 @@ func (records Records) Walk(fn func(record Record) Record) (subRecords Records) 
 	return subRecords
 }
 
+func (records Records) First() (record Record) {
+	if len(records) > 0 {
+		record = records[0]
+	}
+	return record
+}
+
 func (records Records) String() (out string) {
 	newRecords, err := records.Format()
 	if err != nil {
@@ -367,6 +374,16 @@ func (record *Record) GetKV(key string) (kv *KV, ok bool) {
 	}
 	return nil, false
 }
+
+func (record *Record) GetValue(key string) (value string) {
+	for _, kv := range *record {
+		if kv.Key == key {
+			return kv.Value
+		}
+	}
+	return ""
+}
+
 func (record *Record) PopKV(key string) (popKV *KV, ok bool) {
 	newRecord := Record{}
 	for _, kv := range *record {
