@@ -33,8 +33,7 @@ const (
 	KEY_LENGTH                   = "_length" //内联元素指定截取字符串长度
 	ID_SEPARATOR                 = "-"
 	KEY_REF                      = "_ref"
-	KEY_INER_REF                 = "_ref_"    // 内部记录来源,方便出错时,提示信息更有正对性
-	KEY_INHERIT                  = "_inherit" // 是否基础其它相同id的属性(公共参数有时需明确指出不继承其它优先级标签的更多属性)
+	KEY_INER_REF                 = "_ref_" // 内部记录来源,方便出错时,提示信息更有正对性
 )
 
 func Parse(source []byte) (records Records, err error) {
@@ -245,17 +244,6 @@ func MergeRecords(records ...Record) (newRecord Record, err error) {
 	kvMap := map[string]*KV{}
 	breakInherit := false
 	for _, record := range records {
-		inheritAttr, ok := record.GetKV(KEY_INHERIT)
-		if ok {
-			bol, err := strconv.ParseBool(inheritAttr.Value)
-			if err != nil {
-				err = RecordError(record, err)
-				return nil, err
-			}
-			if !bol {
-				breakInherit = true //标记后续父元素不再继承（当前元素的属性需要复制）
-			}
-		}
 		for _, kv := range record {
 			if strings.HasPrefix(kv.Key, KEY_PRIVATE_PREFIX) { // 过滤私有属性，私有属性不继承
 				continue
@@ -333,7 +321,7 @@ func (record *Record) MoveInternalKey() (new Record) {
 	for _, kv := range *record {
 		switch kv.Key {
 		case KEY_INER_NEXT_SIBLING_COLUMN, KEY_INER_INDEX, KEY_LENGTH, KEY_OFFSET, KEY_INER_REF: // 删除内部使用的KV
-		case KEY_COLUMN, KEY_REF, KEY_INHERIT: // 删除内部使用的KV
+		case KEY_COLUMN, KEY_REF: // 删除内部使用的KV
 		default:
 			newRecord = append(newRecord, kv)
 		}
