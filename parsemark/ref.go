@@ -1,4 +1,4 @@
-package markdown2json
+package parsemark
 
 import (
 	"fmt"
@@ -49,6 +49,9 @@ func ResolveRef(records Records) (newRecords Records, err error) {
 			p := u.Path
 			if len(p) > 3 && p[0] == '/' && p[2] == ':' {
 				p = p[1:] // window 下删除开头的/
+			}
+			if len(p) > 2 && p[0] == '/' && p[1] == '.' {
+				p = p[1:] // 相对路径时,删除开头的/
 			}
 			source, err = LoadFromFile(p)
 			if err != nil {

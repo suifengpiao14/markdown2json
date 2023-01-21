@@ -1,4 +1,4 @@
-package markdown2json
+package parsemark
 
 // 只负责解析markdown 到[]*Record 格式，不负责数据整合及有效性验证
 import (
@@ -239,7 +239,7 @@ func RecordError(record Record, err error) error {
 	return err
 }
 
-//MergeRecords 将多条记录中的kv，按保留最早出现的原则，合并成一条
+// MergeRecords 将多条记录中的kv，按保留最早出现的原则，合并成一条
 func MergeRecords(records ...Record) (newRecord Record, err error) {
 	kvMap := map[string]*KV{}
 	breakInherit := false
@@ -315,7 +315,7 @@ func (record Record) String() (out string) {
 	return out
 }
 
-//MoveInternalKey 删除内部使用的KV
+// MoveInternalKey 删除内部使用的KV
 func (record *Record) MoveInternalKey() (new Record) {
 	newRecord := Record{}
 	for _, kv := range *record {
@@ -329,7 +329,7 @@ func (record *Record) MoveInternalKey() (new Record) {
 	return newRecord
 }
 
-//GetIndex  获取记录的_index_
+// GetIndex  获取记录的_index_
 func (record *Record) GetIndex() (index string) {
 	if indexAttr, ok := record.GetKV(KEY_INER_INDEX); ok {
 		return indexAttr.Value
@@ -337,7 +337,7 @@ func (record *Record) GetIndex() (index string) {
 	return ""
 }
 
-//GetID 获取记录的ID
+// GetID 获取记录的ID
 func (record *Record) GetID() (index string) {
 	if idAttr, ok := record.GetKV(KEY_ID); ok {
 		return idAttr.Value
@@ -401,7 +401,7 @@ func (record *Record) ResetKV(kv KV) {
 	}
 }
 
-//GetIndex  获取记录的 父类key
+// GetIndex  获取记录的 父类key
 func GetParentIndex(index string) (parentIndex string) {
 	p := strings.LastIndex(index, ID_SEPARATOR)
 	if p > -1 {
