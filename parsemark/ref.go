@@ -48,10 +48,10 @@ func ResolveRef(records Records) (newRecords Records, err error) {
 		case "file":
 			p := u.Path
 			if len(p) > 3 && p[0] == '/' && p[2] == ':' {
-				p = p[1:] // window 下删除开头的/
+				p = p[1:] // window 下删除开头的/ ,第一个/ 代表host
 			}
 			if len(p) > 2 && p[0] == '/' && p[1] == '.' {
-				p = p[1:] // 相对路径时,删除开头的/
+				p = p[1:] // 相对路径时,删除开头的/,第一个/ 代表host
 			}
 			source, err = LoadFromFile(p)
 			if err != nil {
