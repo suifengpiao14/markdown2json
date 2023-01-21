@@ -3,7 +3,6 @@ module github.com/suifengpiao14/markdown2json
 go 1.17
 
 require (
-	github.com/antchfx/xmlquery v1.3.12
 	github.com/bytewatch/ddl-executor v0.0.0-20191006051259-3983fa694bf8
 	github.com/go-resty/resty/v2 v2.7.0
 	github.com/pkg/errors v0.9.1
@@ -14,11 +13,9 @@ require (
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20180725035823-b12b22c5341f // indirect
-	github.com/antchfx/xpath v1.2.1 // indirect
 	github.com/cznic/mathutil v0.0.0-20181021201202-eba54fb065b7 // indirect
 	github.com/dimfeld/httppath v0.0.0-20170720192232-ee938bf73598 // indirect
 	github.com/go-ole/go-ole v1.2.1 // indirect
-	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.2.0 // indirect
 	github.com/google/gxui v0.0.0-20151028112939-f85e0a97b3a4 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.1 // indirect
