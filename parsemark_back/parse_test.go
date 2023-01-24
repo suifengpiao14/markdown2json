@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/suifengpiao14/markdown2json/parsemark"
+	parsemark "github.com/suifengpiao14/markdown2json/parsemark_back"
 )
 
 func TestParse(t *testing.T) {

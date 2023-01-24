@@ -7,12 +7,12 @@
 - 请求方法 :<!--doc.api.method --> POST
 
 **环境：**
-- 开发： <!--doc.server.proxy id=dev description="开发环境"-->193.112.197.63 http://opms.huishoubao.com.cn
-- 测试：<!--doc.server.proxy id=test description="测试环境"-->xx.xx.xx.xx  http://opms.huishoubao.com.cn
+- 开发： <!--doc.server.proxy.dev description="开发环境"-->193.112.197.63 http://opms.huishoubao.com.cn
+- 测试：<!--doc.server.proxy.test description="测试环境"-->xx.xx.xx.xx  http://opms.huishoubao.com.cn
 - 线上：<!--doc.server.url-->http://opms.huishoubao.com.cn
-<!--doc.parameter._ref="file:///D:/go/markdown2json/example/commonArgs.md#requestParamter" position=body id=requestParamter-->
+<!--doc.parameter.requestParamter _ref="file:///./example/commonArgs.md#doc.parameter" /-->
 **请求参数：**
-<!--doc.parameter id=requestParamter prefix="_param" position=body _column="name,type,required,default,description"-->
+<!--doc.parameter.requestParamter._param  position=body _column="name,type,required,default,description"-->
 |参数名|类型|必选|默认值|说明|
 |:----    |:---|:----- |-----   |-----   |
 |scene| string|是|-|场景<br/>枚举值:3C(3C),3C_NEW(3C_NEW)|
@@ -22,8 +22,8 @@
 
 <Attr name="hello world" />
 
-<!--doc.server.variables=signature:joenebfhefeh -->
-<!--doc.service._ref="file:///D:/go/markdown2json/example/readme.md"-->
+<!--doc.server variables=signature:joenebfhefeh /-->
+<!--doc.service _ref="file:///./example/readme.md"/-->
 
 <!--doc.service.preRequest-->
 ```javascript
@@ -52,7 +52,7 @@ options.headers['HSB-OPENAPI-SIGNATURE']= String(singnature);
 ```
 
 **返回结果：**
-<!--doc.parameter id=responseParameter position=body httpStatus="200" _column="name,type,description"-->
+<!--doc.parameter.responseParameter position=body httpStatus="200" _column="name,type,description"-->
 |参数名|类型|说明|
 |:-----  |:-----|----- |
 |_ret |string   |0成功 1失败  |
@@ -62,7 +62,7 @@ options.headers['HSB-OPENAPI-SIGNATURE']= String(singnature);
 **返回示例：**
 
 成功示例
-<!--doc.example.response id=ok -->
+<!--doc.example.response.ok-->
 ```json
 {
    "errcode":"0",
@@ -73,7 +73,7 @@ options.headers['HSB-OPENAPI-SIGNATURE']= String(singnature);
 **返回示例：**
 
 失败示例
-<!--doc.example.response id=err -->
+<!--doc.example.response.err-->
 ```json
 {
    "errcode":"15785",

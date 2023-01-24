@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/suifengpiao14/markdown2json/parsemark"
+	parsemark "github.com/suifengpiao14/markdown2json/parsemark_back"
 )
 
 func TestResolveRef(t *testing.T) {

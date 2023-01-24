@@ -6,6 +6,8 @@ require (
 	github.com/bytewatch/ddl-executor v0.0.0-20191006051259-3983fa694bf8
 	github.com/go-resty/resty/v2 v2.7.0
 	github.com/pkg/errors v0.9.1
+	github.com/tidwall/gjson v1.14.4
+	github.com/tidwall/sjson v1.2.5
 	github.com/yuin/goldmark v1.4.13
 	github.com/yuin/goldmark-meta v1.1.0
 	goa.design/goa v2.2.5+incompatible
@@ -30,6 +32,8 @@ require (
 	github.com/shirou/gopsutil v2.18.10+incompatible // indirect
 	github.com/sirupsen/logrus v1.3.0 // indirect
 	github.com/smartystreets/goconvey v1.7.2 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/zach-klippenstein/goregen v0.0.0-20160303162051-795b5e3961ea // indirect
 	golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2 // indirect
 	golang.org/x/net v0.0.0-20220726230323-06994584191e // indirect

@@ -8,7 +8,7 @@ import (
 
 func TestParseDDL(t *testing.T) {
 	ddls := GetDDL()
-	tables, err := ParseDDL(ddls, "ad1")
+	tables, err := ParseDDL(ddls, "ad")
 	if err != nil {
 		panic(err)
 	}
