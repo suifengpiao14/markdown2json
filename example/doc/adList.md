@@ -22,8 +22,8 @@
 |advertiserId| string|是|广告主||
 |beginAt| string|是|可以投放开始时间||
 |endAt| string|是|投放结束时间||
-|index| string|是|页索引,0开始||
-|size| string|是|每页数量||
+|index| string|是|页索引,0开始|0|
+|size| string|是|每页数量|10|
 
 
 **请求示例：**
@@ -36,9 +36,9 @@
 }
 ``` 
 **返回参数：**
+<!--doc.parameter.responseParameter position=body httpStatus="200" _column="name,type,description,example"-->
 | 参数名                | 参数类型 | 描述             | 示例                      |
 | --------------------- | -------- | ---------------- | ------------------------- |
-<!--doc.parameter.responseParameter position=body httpStatus="200" _column="name,type,description,example"-->
 |code                  | string   | 业务状态码         | -                         |
 | message   | string   | 业务提示           | -                         |
 | items               | array | 数组         | -                        |
@@ -54,8 +54,8 @@
 | <!--map _value="db.ad.advertise.remark"-->items[].remark|string |{{jsonGet . "db.ad.advertise.remark.comment"}}|营养早餐广告| 
 | <!--map _value="db.ad.advertise.valueObj"-->items[].valueObj|string |{{jsonGet . "db.ad.advertise.value_obj.comment"}}|值对象| 
 | pagination|object |对象|| 
-| <!--map _value="doc.parameter.requestParamter.index"-->pagination.index|string |{{jsonGet . "doc.parameter.requestParamter.index.description"}}|| 
-| <!--map _value="doc.parameter.requestParamter.size"-->pagination.size|string |{{jsonGet . "doc.parameter.requestParamter.size.description"}}|10| 
+| <!--map _value="doc.parameter.requestParamter.index"-->pagination.index|string |{{jsonGet . "doc.parameter.requestParamter.index.description"}}|{{jsonGet . "doc.parameter.requestParamter.index.default"}}| 
+| <!--map _value="doc.parameter.requestParamter.size"-->pagination.size|string |{{jsonGet . "doc.parameter.requestParamter.size.description"}}|{{jsonGet . "doc.parameter.requestParamter.size.default"}}| 
 | pagination.total|string |总数|60| 
 
 
@@ -65,8 +65,8 @@
 "code":"0",
 "message":"ok",
 "items":[
-    {{jsonGet . "doc.parameter.responseParameter.items.0"}}
+    {{jsonExample . "doc.parameter.responseParameter.items[]" -}}
 ],
-"pagination":{{jsonGet . "doc.parameter.responseParameter.pagination"}}
+"pagination":{{jsonExample . "doc.parameter.responseParameter.pagination" -}}
 }
 ``` 

@@ -187,7 +187,6 @@ func (records Records) Json() (out string) {
 			}
 			out, err = sjson.Set(out, key, kv.Value)
 			if err != nil {
-				fmt.Println(out)
 				panic(err)
 			}
 		}

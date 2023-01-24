@@ -58,3 +58,40 @@ func GetTplContent() (tplContent string, err error) {
 	}
 	return tplContent, nil
 }
+
+func TestJsonExample(t *testing.T) {
+	jsonStr := `
+	{
+		"common":{
+			"head":{
+				"content-type":{
+					"name":"content-type",
+					"type":"string",
+					"required":"是",
+					"default":"application/json",
+					"desc":"文件格式"
+				},
+				"appid":{
+					"name":"appid",
+					"type":"string",
+					"required":"是",
+					"default":"",
+					"desc":"访问服务的备案id"
+				},
+				"signature":{
+					"name":"appid",
+					"type":"string",
+					"required":"是",
+					"default":"",
+					"desc":"签名,外网访问需开启签名"
+				}
+			}
+		}
+}
+	`
+	out, err := JsonExample(jsonStr, "")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(out)
+}
