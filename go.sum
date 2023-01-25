@@ -229,8 +229,8 @@ github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/struCoder/pidusage v0.1.2/go.mod h1:pWBlW3YuSwRl6h7R5KbvA4N8oOqe9LjaKW5CwT1SPjI=
 github.com/suifengpiao14/ddl-executor v0.0.0-20220524105604-31a4142e615e h1:FwdMcQOrzVil0QV/94lNjpejD/aBIfafZaZXEnH1BWQ=
 github.com/suifengpiao14/ddl-executor v0.0.0-20220524105604-31a4142e615e/go.mod h1:wEXsB9Xw4x8YOgbOJjC/4hFwFplZFBbxP9qRnm1WtzQ=
-github.com/suifengpiao14/jsonschemaline v0.0.10 h1:PVWt5G3oR0GlVZz+g+mHfJIvSmDHjHN73fEo1kR6cSQ=
-github.com/suifengpiao14/jsonschemaline v0.0.10/go.mod h1:dvWLxNu3yQDM1oCcexkWgyWx8eZk55Rv4hMgmMfi674=
+github.com/suifengpiao14/jsonschemaline v0.0.11 h1:oiMi/fuyZiLa//sD+hO103g8X+LKcPZiHY22T6BxVlQ=
+github.com/suifengpiao14/jsonschemaline v0.0.11/go.mod h1:dvWLxNu3yQDM1oCcexkWgyWx8eZk55Rv4hMgmMfi674=
 github.com/tiancaiamao/appdash v0.0.0-20181126055449-889f96f722a2/go.mod h1:2PfKggNGDuadAa0LElHrByyrz4JPZ9fFx6Gs7nx7ZZU=
 github.com/tidwall/gjson v1.12.1/go.mod h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=
 github.com/tidwall/gjson v1.14.1/go.mod h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=

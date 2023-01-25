@@ -44,17 +44,21 @@ func JsonGet(data interface{}, path string) (out string, err error) {
 
 	result := gjson.Get(s, path)
 	if result.Exists() {
-		out = result.String()
+		str := result.String()
+		if !strings.Contains(str, "{{") { // 内部不再有模板的情况,可以执行模板函数,否则保持原来模板输出
+			out = str
+		}
 	}
 	return out, nil
 }
 
 func JsonExample(data interface{}, path string) (out string, err error) {
+	tpl := fmt.Sprintf(`{{jsonExample . "%s"}}`, path)
+	out = tpl //默认为无法解析,输出原模板
 	dataStr, err := interface2string(data)
 	if err != nil {
 		return "", err
 	}
-	fmt.Println(dataStr)
 	result := gjson.Parse(dataStr)
 	if path != "" {
 		result = result.Get(path)
@@ -64,30 +68,39 @@ func JsonExample(data interface{}, path string) (out string, err error) {
 		err = errors.Errorf("empty str got by path: %s,in data: %s", path, dataStr)
 		return "", err
 	}
+	if strings.Contains(str, "{{") { // 内部有模板的情况,保持原来模板输出
+		return out, nil
+	}
 	lineSchema, err := jsonschemaline.Json2lineSchema(str)
 	if err != nil {
 		return "", err
 	}
 
-	attrPaths := map[string]bool{}
+	uniqueueMap := map[string]bool{}
+	pathArr := make([]string, 0) // 使用数组保持原有顺序
 	for _, item := range lineSchema.Items {
 		path := item.Fullname
 		lastDot := strings.LastIndex(item.Fullname, ".")
 		if lastDot > -1 {
 			path = item.Fullname[:lastDot]
 		}
-		attrPaths[path] = true
-	}
-
-	var w bytes.Buffer
-	w.WriteString("version=http://json-schema.org/draft-07/schema#,direction=out,id=example\n")
-	for path := range attrPaths {
-
+		if _, ok := uniqueueMap[path]; ok {
+			continue
+		}
 		attrResult := gjson.Get(str, path)
 		typeResult := attrResult.Get("type")
 		if !typeResult.Exists() { // 一定要存在类型属性
 			continue
 		}
+		uniqueueMap[path] = true
+		pathArr = append(pathArr, path)
+	}
+
+	var w bytes.Buffer
+	w.WriteString("version=http://json-schema.org/draft-07/schema#,direction=out,id=example\n")
+	for _, path := range pathArr {
+		attrResult := gjson.Get(str, path)
+		typeResult := attrResult.Get("type")
 		w.WriteString(fmt.Sprintf("fullname=%s,", path))
 		format := attrResult.Get("format").String()
 		defaul := attrResult.Get("default").String()

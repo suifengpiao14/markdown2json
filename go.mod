@@ -6,7 +6,7 @@ require (
 	github.com/bytewatch/ddl-executor v0.0.0-20191006051259-3983fa694bf8
 	github.com/go-resty/resty/v2 v2.7.0
 	github.com/pkg/errors v0.9.1
-	github.com/suifengpiao14/jsonschemaline v0.0.10
+	github.com/suifengpiao14/jsonschemaline v0.0.11
 	github.com/tidwall/gjson v1.14.4
 	github.com/tidwall/sjson v1.2.5
 	github.com/yuin/goldmark v1.4.13

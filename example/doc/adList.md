@@ -39,8 +39,8 @@
 <!--doc.parameter.responseParameter position=body httpStatus="200" _column="name,type,description,example"-->
 | 参数名                | 参数类型 | 描述             | 示例                      |
 | --------------------- | -------- | ---------------- | ------------------------- |
-|code                  | string   | 业务状态码         | -                         |
-| message   | string   | 业务提示           | -                         |
+|code                  | string   | 业务状态码         | 0                         |
+| message   | string   | 业务提示           | ok                         |
 | items               | array | 数组         | -                        |
 | <!--map _value="db.ad.advertise.id"-->items[].id|string |{{jsonGet . "db.ad.advertise.id.comment"}}|0| 
 | <!--map _value="db.ad.advertise.title"-->items[].title|string |{{jsonGet . "db.ad.advertise.title.comment"}}|新年好礼| 
@@ -61,12 +61,5 @@
 
 **返回示例：**
 ```json 
-{
-"code":"0",
-"message":"ok",
-"items":[
-    {{jsonExample . "doc.parameter.responseParameter.items[]" -}}
-],
-"pagination":{{jsonExample . "doc.parameter.responseParameter.pagination" -}}
-}
+{{jsonExample . "doc.parameter.responseParameter" -}}
 ``` 
