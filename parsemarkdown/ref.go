@@ -73,7 +73,7 @@ func ResolveRef(records Records) (newRecords Records, err error) {
 		subRecords := Records{}
 		switch ext {
 		case ".md", ".markdown":
-			subRecords, err = Parse(source)
+			subRecords, err = ParseWithRef(source)
 
 		case ".sql":
 			ddls := string(source)
@@ -94,7 +94,7 @@ func ResolveRef(records Records) (newRecords Records, err error) {
 				oldTagName := record.GetTag()
 				// 替换tag值
 				newTagName := strings.Replace(oldTagName, u.Fragment, refRecord.GetTag(), 1)
-				record.ResetKV(KV{
+				record.SetKV(KV{
 					Key:   KEY_TAG,
 					Value: newTagName,
 				})
@@ -110,7 +110,7 @@ func ResolveRef(records Records) (newRecords Records, err error) {
 				if kv.Key == KEY_TAG || kv.Key == KEY_TEXT || kv.Key == KEY_REF || kv.Key == KEY_IS_END_BY_BACKSLASH {
 					continue
 				}
-				record.ResetKV(*kv)
+				record.SetKV(*kv)
 			}
 			tmpRcords = append(tmpRcords, record)
 		}
@@ -160,36 +160,36 @@ func ParsSQLDDL(ddls string, dbName string) (records Records, err error) {
 	for _, table := range tables {
 		for _, colum := range table.Columns {
 			record := Record{}
-			record.ResetKV(KV{
+			record.SetKV(KV{
 				Key:   KEY_TAG,
 				Value: fmt.Sprintf("%s.%s.%s", table.DatabaseName, table.TableName, colum.Name),
 			})
-			record.ResetKV(KV{
+			record.SetKV(KV{
 				Key:   "goType",
 				Value: colum.GoType,
 			})
-			record.ResetKV(KV{
+			record.SetKV(KV{
 				Key:   "comment",
 				Value: colum.Comment,
 			})
 
-			record.ResetKV(KV{
+			record.SetKV(KV{
 				Key:   "nullable",
 				Value: strconv.FormatBool(colum.Nullable),
 			})
-			record.ResetKV(KV{
+			record.SetKV(KV{
 				Key:   "enums",
 				Value: strings.Join(colum.Enums, ","),
 			})
-			record.ResetKV(KV{
+			record.SetKV(KV{
 				Key:   "default",
 				Value: colum.DefaultValue,
 			})
-			record.ResetKV(KV{
+			record.SetKV(KV{
 				Key:   "unsigned",
 				Value: strconv.FormatBool(colum.Unsigned),
 			})
-			record.ResetKV(KV{
+			record.SetKV(KV{
 				Key:   "size",
 				Value: strconv.Itoa(colum.Size),
 			})

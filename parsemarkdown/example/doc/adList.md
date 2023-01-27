@@ -3,10 +3,10 @@
 
 ***请求路径***: <Uri>/admin/v1/ad/add</Uri>
 
-***请求方法***: <Method>POST</Method>
-<Ref file="./example/sql/ad.sql#ad" ns="db.ad"/>
+***请求方法***: POST
+<Ref file="./example/sql/ad.sql#ad" name="db.ad"/>
 <!--db.ad  _ref="file:///./example/sql/ad.sql#ad"  -->
-<Ref file="./example/doc/common.md#doc.parameter" ns="common.head"/>
+<Ref file="./example/doc/common.md#doc.parameter" namespace="common.head"/>
 <!--common.head _ref="file:///./example/doc/common.md#doc.parameter"-->
 
 ***请求头***:
@@ -16,9 +16,10 @@
 |{{jsonGet . "common.head.appid.name"}}| {{jsonGet . "common.head.appid.type"}}|{{jsonGet . "common.head.appid.required"}}|{{jsonGet . "common.head.appid.default"}}|{{jsonGet . "common.head.appid.description"}}|
 |{{jsonGet . "common.head.signature.name"}}| {{jsonGet . "common.head.signature.type"}}|{{jsonGet . "common.head.signature.required"}}|{{jsonGet . "common.head.signature.default"}}|{{jsonGet . "common.head.signature.description"}}|
 
-<Parameter  ns="doc.parameter.requestParamter" column="name,type,required,description,default,example" position="body" encoding="markdown/table" >
 
 ***请求参数***:
+<Parameter  namespace="doc.parameter.requestParamter" column="name,type,required,description,default,example" position="body" encoding="markdown/table" >
+<!--doc.parameter.requestParamter _column="name,type,required,description,default,example"  position=body-->
 |参数名|类型|必选|说明|默认值|示例|
 |:----    |:---|:----- |-----   |-----   |-----   |
 |title| string|是|广告标题||新年豪礼|
@@ -33,10 +34,10 @@
 ```json
 {{jsonExample . "doc.parameter.requestParamter" -}}
 ``` 
-<Parameter ns="doc.parameter.response" encoding="markdown/table" column="name,type,description,example" position="body"  httpSttus="200" >
+<Parameter namespace="doc.parameter.response" encoding="markdown/table" column="name,type,description,example" position="body"  httpSttus="200">
 
 **返回参数：**
-<!--doc.parameter.responseParameter position=body httpStatus="200" column="name,type,description,example"-->
+<!--doc.parameter.responseParameter position=body httpStatus="200" _column="name,type,description,example"-->
 | 参数名                | 参数类型 | 描述             | 示例                      |
 | --------------------- | -------- | ---------------- | ------------------------- |
 |code                  | string   | 业务状态码         | 0                         |
@@ -60,8 +61,7 @@
 
 </Parameter>
 
-<Example ns="api.example.response.200" encoding="markdown/code">
-<br/>
+<Example namespace="api.example.response.200" encoding="markdown/code">
 
 **返回示例(正常)：**
 ```json 

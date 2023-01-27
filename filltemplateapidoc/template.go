@@ -138,6 +138,16 @@ func JsonExample(data interface{}, path string) (out string, err error) {
 	return out, nil
 }
 
+func CurlExample(data interface{}, path string) (out string, err error) {
+	tpl := fmt.Sprintf(`{{curlExample . "%s"}}`, path)
+	out = tpl //默认为无法解析,输出原模板
+	dataStr, err := interface2string(data)
+	if err != nil {
+		return "", err
+	}
+	return dataStr, nil
+}
+
 func interface2string(data interface{}) (out string, err error) {
 	out, ok := data.(string)
 	if !ok {

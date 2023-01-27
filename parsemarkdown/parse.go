@@ -5,11 +5,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"reflect"
 	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/suifengpiao14/markdown2json/filltemplateapidoc"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"github.com/yuin/goldmark"
@@ -23,21 +25,19 @@ import (
 )
 
 const (
-	KEY_PRIVATE_PREFIX           = "_"
-	KEY_INER_NEXT_SIBLING_COLUMN = "_nextsiblingName_"
-	KEY_INER_INDEX               = "_index_"
-	KEY_ID                       = "id"
-	KEY_TAG                      = "_tag"
-	KEY_IS_END_BY_BACKSLASH      = "_isEndByBackslash"
-	KEY_TEXT                     = "_text"
-	KEY_COLUMN                   = "_column"
-	KEY_DB                       = "db"
-	KEY_TABLE                    = "table"
-	KEY_OFFSET                   = "_offset" //内联元素指定截取字符串位置
-	KEY_LENGTH                   = "_length" //内联元素指定截取字符串长度
-	ID_SEPARATOR                 = "-"
-	KEY_REF                      = "_ref"
-	KEY_INER_REF                 = "_ref_" // 内部记录来源,方便出错时,提示信息更有正对性
+	KEY_PRIVATE_PREFIX      = "_"
+	KEY_ID                  = "id"
+	KEY_ENCODING            = "encoding"
+	KEY_RAW                 = "_raw"
+	KEY_TAG                 = "_tag"
+	KEY_IS_END_BY_BACKSLASH = "_isEndByBackslash"
+	KEY_TEXT                = "_text"
+	KEY_COLUMN              = "column"
+	KEY_NAMESPACE           = "_ns"
+	KEY_OFFSET              = "_offset" //内联元素指定截取字符串位置
+	KEY_LENGTH              = "_length" //内联元素指定截取字符串长度
+	ID_SEPARATOR            = "-"
+	KEY_REF                 = "_ref"
 )
 
 const (
@@ -45,7 +45,30 @@ const (
 	STRING_FALSE = "false"
 )
 
-func Parse(source []byte) (records Records, err error) {
+// ParseWithTemplate 解析markdown文档,并且解析文档中的引用和模板替换
+func ParseWithTemplate(str string) (s string, err error) {
+	s = str
+	preTplVariableCount := -1
+	for {
+		tplVariableCount := strings.Count(s, "{{")
+		if preTplVariableCount == tplVariableCount {
+			return s, nil
+		}
+		records, err := ParseWithRef([]byte(s))
+		if err != nil {
+			panic(err)
+		}
+
+		preTplVariableCount = tplVariableCount
+		s, err = filltemplateapidoc.View(s, records.Json())
+		if err != nil {
+			return "", err
+		}
+	}
+}
+
+// ParseWithRef 解析markdown文档,并且解析文档中的引用
+func ParseWithRef(source []byte) (records Records, err error) {
 	md := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -121,7 +144,7 @@ func (records Records) Format() (newRecords Records, err error) {
 		for i := l - 2; i > -1; i-- {
 			prevRecord := sameTagRecords[i]
 			for _, kv := range prevRecord {
-				record.AddKV(*kv)
+				record.SetKV(*kv)
 			}
 		}
 		newRecords = append(newRecords, record)
@@ -194,16 +217,6 @@ func (records Records) Json() (out string) {
 	return out
 }
 
-func (records Records) GetByIndex(index string) (newRecords Records) {
-	newRecords = make(Records, 0)
-	for _, record := range records {
-		if record.GetIndex() == index {
-			newRecords = append(newRecords, record)
-		}
-	}
-	return newRecords
-}
-
 func (records Records) GetByTag(tag string) (newRecords Records) {
 	newRecords = make(Records, 0)
 	for _, record := range records {
@@ -222,18 +235,6 @@ func (records Records) GetByTagWithChildren(tag string) (newRecords Records) {
 		}
 	}
 	return newRecords
-}
-
-func RecordError(record Record, err error) error {
-	idAttr, ok := record.GetKV(KEY_ID)
-	if ok {
-		err = errors.WithMessagef(err, "id: %s", idAttr.Value)
-	}
-	innerRefAttr, ok := record.GetKV(KEY_INER_REF)
-	if ok {
-		err = errors.WithMessagef(err, "ref: %s", innerRefAttr.Value)
-	}
-	return err
 }
 
 // MergeRecords 将多条记录中的kv，按保留最早出现的原则，合并成一条
@@ -263,13 +264,9 @@ func MergeRecords(records ...Record) (newRecord Record, err error) {
 	}
 	newRecord = Record{}
 	for _, kv := range kvMap {
-		newRecord.AddKV(*kv)
+		newRecord.SetKV(*kv)
 	}
 	return newRecord, nil
-}
-
-func (record *Record) AddKV(kv KV) {
-	*record = append(*record, &kv) // 首先添加
 }
 
 func (record *Record) IsEmptyKey(key string) (empty bool) {
@@ -294,7 +291,7 @@ func (record *Record) SetNotExistsKV(kv KV) {
 	}
 	*record = append(*record, &kv) // 首先添加
 }
-func (record *Record) ResetKV(kv KV) {
+func (record *Record) SetKV(kv KV) {
 	exists := false
 	okv, exists := record.GetKV(kv.Key)
 	if exists {
@@ -323,21 +320,13 @@ func (record *Record) MoveInternalKey() (new Record) {
 	newRecord := Record{}
 	for _, kv := range *record {
 		switch kv.Key {
-		case KEY_INER_NEXT_SIBLING_COLUMN, KEY_INER_INDEX, KEY_LENGTH, KEY_OFFSET, KEY_INER_REF: // 删除内部使用的KV
+		case KEY_LENGTH, KEY_OFFSET: // 删除内部使用的KV
 		case KEY_COLUMN, KEY_REF: // 删除内部使用的KV
 		default:
 			newRecord = append(newRecord, kv)
 		}
 	}
 	return newRecord
-}
-
-// GetIndex  获取记录的_index_
-func (record *Record) GetIndex() (index string) {
-	if indexAttr, ok := record.GetKV(KEY_INER_INDEX); ok {
-		return indexAttr.Value
-	}
-	return ""
 }
 
 // GetID 获取记录的ID
@@ -356,11 +345,19 @@ func (record *Record) GetTag() (index string) {
 	return ""
 }
 
+// GetNamespace 获取记录的命名空间
+func (record *Record) GetNamespace() (value string) {
+	if kv, ok := record.GetKV(KEY_NAMESPACE); ok {
+		return kv.Value
+	}
+	return ""
+}
+
 // 克隆记录
 func (record *Record) Clone() (newRecord Record) {
 	newRecord = Record{}
 	for _, kv := range *record {
-		newRecord.AddKV(*kv)
+		newRecord.SetKV(*kv)
 	}
 	return newRecord
 }
@@ -420,10 +417,10 @@ func CloneTabHeader(record Record) Record { // 表格元素需要把db、table �
 	newRecord := Record{}
 	for _, kv := range record {
 		switch kv.Key {
-		case KEY_COLUMN, KEY_ID, KEY_REF, KEY_INER_NEXT_SIBLING_COLUMN: // 这些属性不复制
+		case KEY_COLUMN, KEY_ID, KEY_REF: // 这些属性不复制
 			continue
 		default:
-			newRecord.AddKV(*kv)
+			newRecord.SetKV(*kv)
 		}
 	}
 	return newRecord
@@ -435,10 +432,9 @@ func SetNextSiblingValue(nextNode ast.Node, record *Record, records *Records, so
 			Key:   "language",
 			Value: string(fencedCodeNode.Language(source)),
 		}
-		record.ResetKV(*attr)
+		record.SetKV(*attr)
 		value := Node2RawText(nextNode, source)
-
-		record.AddKV(KV{
+		record.SetKV(KV{
 			Key:   KEY_TEXT,
 			Value: value, // 修改标签名称的值
 		})
@@ -491,7 +487,7 @@ func SetNextSiblingValue(nextNode ast.Node, record *Record, records *Records, so
 				if cellIndex == 0 {
 					tableTagName := newRecord.GetTag()
 					columnTagName := fmt.Sprintf("%s.%s", tableTagName, value)
-					newRecord.ResetKV(KV{
+					newRecord.SetKV(KV{
 						Key:   KEY_TAG,
 						Value: columnTagName,
 					})
@@ -500,7 +496,7 @@ func SetNextSiblingValue(nextNode ast.Node, record *Record, records *Records, so
 					Key:   name,
 					Value: value,
 				}
-				newRecord.ResetKV(kv)
+				newRecord.SetKV(kv)
 				cellNode = cellNode.NextSibling()
 				cellIndex++
 			}
@@ -525,7 +521,7 @@ func SetNextSiblingValue(nextNode ast.Node, record *Record, records *Records, so
 		}
 		value = value[:l+1]
 	}
-	record.AddKV(KV{
+	record.SetKV(KV{
 		Key:   KEY_TEXT,
 		Value: value,
 	})
@@ -549,6 +545,11 @@ func parseNode(node ast.Node, source []byte) (records Records, err error) {
 					return nil, err
 				}
 			}
+			rawText := NodeRaw(node, source)
+			record.SetKV(KV{
+				Key:   KEY_RAW,
+				Value: rawText,
+			})
 			records = append(records, record)
 		case ast.HTMLBlockType7: // 自关闭自定义标签，后面需要加空行，如果存在这种情况，抛出错误，提示增加空行
 			segments := htmlBlock.Lines()
@@ -610,7 +611,7 @@ func rawHtml2Record(rawText string) (record Record, err error) {
 	if endPos != len(rawText)-1 {
 		siblingValue := rawText[endPos+1:]
 		rawText = rawText[:endPos+1]
-		record.AddKV(KV{
+		record.SetKV(KV{
 			Key:   KEY_TEXT,
 			Value: siblingValue,
 		})
@@ -623,12 +624,12 @@ func rawHtml2Record(rawText string) (record Record, err error) {
 		rawText = rawText[:lastIndex]
 		endBackslash = STRING_TRUE
 		// /结束不会再设置 text,此处设置默认kv
-		record.ResetKV(KV{
+		record.SetKV(KV{
 			Key:   KEY_TEXT,
 			Value: "",
 		})
 	}
-	record.ResetKV(KV{
+	record.SetKV(KV{
 		Key:   KEY_IS_END_BY_BACKSLASH,
 		Value: endBackslash,
 	})
@@ -639,7 +640,7 @@ func rawHtml2Record(rawText string) (record Record, err error) {
 		tagName = rawText[:index]
 		otherAttrStr = strings.TrimSpace(rawText[index:])
 	}
-	record.ResetKV(KV{
+	record.SetKV(KV{
 		Key:   KEY_TAG,
 		Value: tagName,
 	})
@@ -678,7 +679,7 @@ func rawHtml2Record(rawText string) (record Record, err error) {
 		if strings.HasSuffix(attr.Key, ARRAY_SUFFIX) { // 数组元素替换为原样
 			attr.Key = fmt.Sprintf("%s[]", strings.TrimSuffix(attr.Key, ARRAY_SUFFIX))
 		}
-		record.ResetKV(attr)
+		record.SetKV(attr)
 	}
 
 	return record, nil
@@ -715,4 +716,47 @@ func Node2RawText(node ast.Node, source []byte) (out string) {
 	b := node.Text(source)
 	out = string(b)
 	return strings.TrimSpace(out)
+}
+
+// NodeRaw 提取原始文本
+func NodeRaw(node ast.Node, source []byte) (out string) {
+	var rawW bytes.Buffer
+	switch node.Type() {
+	case ast.TypeBlock:
+		for i := 0; i < node.Lines().Len(); i++ {
+			s := node.Lines().At(i)
+			rawW.WriteString(string(source[s.Start:s.Stop]))
+		}
+		out = rawW.String()
+		return out
+	}
+
+	return out
+}
+
+// RawHelper 获取原始文本(todo)
+func RawHelper(w io.Writer, v ast.Node, source []byte, level int, kv map[string]string, cb func(int)) {
+	name := v.Kind().String()
+	indent := strings.Repeat("    ", level)
+	fmt.Fprintf(w, "%s%s {\n", indent, name)
+	indent2 := strings.Repeat("    ", level+1)
+	if v.Type() == ast.TypeBlock {
+		fmt.Fprintf(w, "%sRawText: \"", indent2)
+		for i := 0; i < v.Lines().Len(); i++ {
+			line := v.Lines().At(i)
+			fmt.Fprintf(w, "%s", line.Value(source))
+		}
+		fmt.Fprintf(w, "\"\n")
+		fmt.Fprintf(w, "%sHasBlankPreviousLines: %v\n", indent2, v.HasBlankPreviousLines())
+	}
+	for name, value := range kv {
+		fmt.Fprintf(w, "%s%s: %s\n", indent2, name, value)
+	}
+	if cb != nil {
+		cb(level + 1)
+	}
+	for c := v.FirstChild(); c != nil; c = c.NextSibling() {
+		c.Dump(source, level+1)
+	}
+	fmt.Fprintf(w, "%s}\n", indent)
 }

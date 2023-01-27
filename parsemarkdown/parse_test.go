@@ -10,6 +10,29 @@ import (
 	"github.com/suifengpiao14/markdown2json/parsemarkdown"
 )
 
+func TestParseWithTemplate(t *testing.T) {
+	s := GetConent()
+	out, err := parsemarkdown.ParseWithTemplate(s)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(out)
+}
+
+func GetConent() string {
+	file := "./example/doc/adList.md"
+	fd, err := os.OpenFile(file, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		panic(err)
+	}
+	source, err := io.ReadAll(fd)
+	if err != nil {
+		panic(err)
+	}
+	s := string(source)
+	return s
+
+}
 func TestParse(t *testing.T) {
 	records := GetRecords()
 	str := records.Json()
@@ -27,7 +50,7 @@ func GetRecords() parsemarkdown.Records {
 	if err != nil {
 		panic(err)
 	}
-	records, err := parsemarkdown.Parse(source)
+	records, err := parsemarkdown.ParseWithRef(source)
 	if err != nil {
 		panic(err)
 	}
@@ -52,11 +75,6 @@ func TestMerge(t *testing.T) {
 		panic(err)
 	}
 	out := string(b)
-	fmt.Println(out)
-}
-func TestRecordString(t *testing.T) {
-	records := GetRecords()
-	out := records.FilterByKV(parsemarkdown.KV{Key: parsemarkdown.KEY_DB, Value: "doc"}).Json()
 	fmt.Println(out)
 }
 
