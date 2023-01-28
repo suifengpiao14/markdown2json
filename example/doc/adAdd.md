@@ -1,44 +1,45 @@
 # 新增广告
-***说明***: <Line id="title">新增广告</Line>
+***说明***: <Attr id="title">新增广告</Attr>
 
-***请求路径***: <Line id="path">/admin/v1/ad/add</Line>
+***请求路径***: <Attr id="path">/admin/v1/ad/add</Attr>
 
-***请求方法***: <Line id="method">POST</Line>
+***请求方法***: <Attr id="method">POST</Attr>
 <Ref file="./example/doc/common.md#doc.request.header" id="common.header"/>
 
 ***请求头***:
-{{jsonGet . "common.header.text"}}
+{{Ref .common.header}}
 
 ***请求参数***:
 
-<Table  id="doc.parameter.request" column="name,type,required,description,default,example" position="body" encoding="markdown/table" ref.obj.file="./adList.md#doc.parameter.response.items[]" ref.obj.map="name:name,type:type,required:是,description:description,default:-,example:example" >
+<Ref file= "./adList.md#doc.parameter.response.items[]" id="obj" />
+<Set  id="doc.parameter.request" column="name,type,required,description,default,example" position="body" encoding="markdown/table">
 
 |参数名|类型|必选|说明|默认值|示例|
 |:----    |:---|:----- |-----   |-----   |----   |
-|{{getJsonObj "obj.title"}}|
-|{{getJsonObj "obj.advertiserId"}}|
-|{{getJsonObj "obj.summary"}}|
-|{{getJsonObj "obj.image"}}|
-|{{getJsonObj "obj.link"}}|
-|{{getJsonObj "obj.type"}}|
-|{{getJsonObj "obj.beginAt"}}|
-|{{getJsonObj "obj.endAt"}}|
-|{{getJsonObj "obj.remark"}}|
-|{{getJsonObj "obj.valueObj"}}|
+|{{Strtr .obj.title ".name|string|是|.description|.default|.example"}}|
+|{{Strtr .obj.title ".advertiserId|string|是|.description|.default|.example"}}|
+|{{Strtr .obj.title ".summary|string|是|.description|.default|.example"}}|
+|{{Strtr .obj.title ".image|string|是|.description|.default|.example"}}|
+|{{Strtr .obj.title ".link|string|是|.description|.default|.example"}}|
+|{{Strtr .obj.title ".type|string|是|.description|.default|.example"}}|
+|{{Strtr .obj.title ".beginAt|string|是|.description|.default|.example"}}|
+|{{Strtr .obj.title ".endAt|string|是|.description|.default|.example"}}|
+|{{Strtr .obj.title ".remark|string|是|.description|.default|.example"}}|
+|{{Strtr .obj.title ".valueObj|string|是|.description|.default|.example"}}|
 
 **请求示例：**
 ```json
-{{jsonExample . "doc.parameter.request" -}}
+{{jsonExample .doc.parameter.request -}}
 ``` 
 **返回参数：**
-<Table id="doc.parameter.response" encoding="markdown/table" column="name,type,description,example" >
+<Set id="doc.parameter.response" encoding="markdown/table" column="name,type,description,example" >
 | 参数名                | 参数类型 | 描述             | 示例                      |
 | --------------------- | -------- | ---------------- | ------------------------- |
 |code                  | string   | 业务状态码         | -                         |
 | message   | string   | 业务提示           | -                         |
 | data               | object | 对象         | -                        |
 | data.id|string |新增广告ID标识|0| 
-</Table>
+</Set>
 
 **返回示例(正常)：**
 ```json 

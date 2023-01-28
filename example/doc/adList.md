@@ -11,7 +11,7 @@
 
 ***请求参数***:
 <Ref file="./example/sql/ad.sql#ad" id="db.ad"/>
-<Table  id="doc.parameter.request" column="name,type,required,description,default,example" position="body" encoding="markdown/table" >
+<Set  id="doc.parameter.request" column="name,type,required,description,default,example" position="body" encoding="markdown/table" >
 
 |参数名|类型|必选|说明|默认值|示例|
 |:----    |:---|:----- |-----   |-----   |-----   |
@@ -21,13 +21,13 @@
 |endAt| string|是|投放结束时间||2023-01-30 00:00:00|
 |index| string|是|页索引,0开始|0||
 |size| string|是|每页数量|10||
-</Table>
+</Set>
 
 **请求示例：**
 ```json
 {{jsonExample . "doc.parameter.request" -}}
 ``` 
-<Table id="doc.parameter.response" encoding="markdown/table" column="name,type,description,example" >
+<Set id="doc.parameter.response" encoding="markdown/table" column="name,type,description,example" >
 
 **返回参数：**
 | 参数名                | 参数类型 | 描述             | 示例                      |
@@ -51,16 +51,16 @@
 | pagination.size|string |{{jsonGet . "doc.parameter.requestParamter.size.description"}}|{{jsonGet . "doc.parameter.requestParamter.size.default"}}| 
 | pagination.total|string |总数|60| 
 
-</Table>
+</Set>
 
-<Block id="doc.example.response.200" encoding="markdown/code">
+<Obj id="doc.example.response.200" encoding="markdown/code">
 
 **返回示例(正常)：**
 ```json 
 {{jsonExample . "doc.parameter.response" -}}
 ``` 
-</Block>
+</Obj>
 
 ***返回示例(错误)***:
 <Ref file="./example/doc/common.md#doc.example.response.error" id="common.response.error"/>
-{{jsonGet . "common.response.error.text"}}
+{{Ref .common.response.error }}
