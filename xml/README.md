@@ -48,8 +48,8 @@
 7. 占位符标记{{}}.占位符标记不同于其它标记，主要用于将文档中已经标记的数据应用到文档本身.在减少文档重复输入内容方面非常方便，此外还能保持数据一致性。占位符标记是标记抽取的结构化数据应用于当前文档的一个体现，占位符标记，本质上是go语言的template/text,在特定的应用场景下可以增加自定义函数(如接口文档，生成curl案例)，其中内置了部分函数:
 * Get——获取提取数据的子对象或者属性.示例:
 ```go
-// 获取当前对象下obj.title.name 数据(返回值为对象、数组或者字符串)
-{Get . "obj.title.name"}}
+// 获取当前对象下obj.title.application/json.name 数据(返回值为对象、数组或者字符串)如果id中含有特殊字符，则将自特殊字符开始到后续的id值以字符串形式作为第二个参数
+{Get .obj.title ".application/json.name"}}
 ```
 * Strtr——格式化数据输出.示例:
 ```go
@@ -59,5 +59,5 @@
 * Ref——引用文本块.实例:
 ```go
 //引用当前文档中id为common.header.application/json.Get 的块内容(实际为common.header.application/json.Get.text),如果id中含有特殊字符，则将自特殊字符开始到后续的id值以字符串形式作为第二个参数
-{{Ref .common.header "application/json.Get"}}
+{{Ref .common.header ".application/json.Get"}}
 ```
